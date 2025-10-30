@@ -431,21 +431,81 @@
         function dismissMessage() {
             MESSAGE_BOX.classList.add('hidden');
             
+            // Only perform game-ending actions if the state flag is set
             if (gameWon) {
-                clearSave(); // Clear save file on win
-                pendingRestart = false;
-                document.getElementById('cancel-button').classList.add('hidden');
-                initGame(); 
+                clearSave(); 
             } else if (pendingRestart) {
-                clearSave(); // Clear save file on confirmation
-                pendingRestart = false;
-                document.getElementById('cancel-button').classList.add('hidden');
-                initGame(); 
+                // This branch should only be hit if the user clicked "OK" after an error, 
+                // but the Restart confirmation logic has separate handlers (handleRestartConfirmation).
+                // Do nothing here for restart cleanup, as it's handled by handleRestartCancel.
             }
+            // Hide cancel button if it was shown (cleanup)
+            document.getElementById('cancel-button').classList.add('hidden');
+            pendingRestart = false;
         }
         
+        function handleRestartConfirmation() {
+            // This function is bound to the OK button when pendingRestart is true or after a win
+            clearSave();
+            document.getElementById('cancel-button').classList.add('hidden');
+            MESSAGE_BOX.classList.add('hidden');
+            pendingRestart = false;
+            
+            // --- FIX 2: Correct Restart Flow ---
+            // Instead of calling initGame(), which re-checks for saved state, 
+            // we skip directly to the player selection modal.
+            document.getElementById('setup-modal').classList.remove('hidden');
+        }
+        
+        function handleRestartCancel() {
+             // This function is bound to the Cancel button during restart prompt
+            document.getElementById('cancel-button').classList.add('hidden');
+            MESSAGE_BOX.classList.add('hidden');
+            pendingRestart = false;
+            // Restore original button text
+            DISMISS_BUTTON.textContent = 'OK / New Game';
+            // Detach restart confirmation handler and re-attach normal dismiss
+            DISMISS_BUTTON.removeEventListener('click', handleRestartConfirmation);
+            DISMISS_BUTTON.addEventListener('click', dismissMessage);
+        }
+
         function promptRestartConfirmation() {
+            // Show confirmation modal
             showMessage("Confirm Restart", "Are you sure you want to quit the current game and start over? All progress will be lost.", false, true);
+        }
+
+        function showMessage(title, text, isWinner = false, isRestart = false) {
+            document.getElementById('message-title').textContent = title;
+            document.getElementById('message-text').textContent = text;
+            MESSAGE_BOX.classList.remove('hidden');
+            gameWon = isWinner; 
+            pendingRestart = isRestart;
+
+            const cancelButton = document.getElementById('cancel-button');
+            
+            // Cleanup: remove all prior handlers
+            DISMISS_BUTTON.removeEventListener('click', dismissMessage);
+            DISMISS_BUTTON.removeEventListener('click', handleRestartConfirmation);
+            cancelButton.removeEventListener('click', handleRestartCancel);
+
+            if (isRestart) {
+                // Setup for Restart Confirmation
+                DISMISS_BUTTON.textContent = 'Yes, Restart';
+                DISMISS_BUTTON.addEventListener('click', handleRestartConfirmation);
+                
+                cancelButton.classList.remove('hidden');
+                cancelButton.addEventListener('click', handleRestartCancel);
+            } else if (isWinner) {
+                // Setup for Winner Message
+                DISMISS_BUTTON.textContent = 'Start New Game';
+                DISMISS_BUTTON.addEventListener('click', handleRestartConfirmation); // Winner always leads to restart
+                cancelButton.classList.add('hidden');
+            } else {
+                // Setup for Generic Message (e.g., Invalid Claim, BUST)
+                DISMISS_BUTTON.textContent = 'OK';
+                DISMISS_BUTTON.addEventListener('click', dismissMessage);
+                cancelButton.classList.add('hidden');
+            }
         }
 
         function closeModalsOnClickOutside(event) {
@@ -939,6 +999,8 @@
                     CONTINUE_MODAL.classList.add('hidden');
                     runGameSetup(true); // Load saved game
                 };
+                
+                // FIX 1: Clicking Start New Game when a save is found should skip directly to player selection
                 document.getElementById('start-new-game').onclick = () => {
                     CONTINUE_MODAL.classList.add('hidden');
                     clearSave(); // Clear save file
@@ -964,12 +1026,12 @@
             ROLL_BUTTON.removeEventListener('click', handleRoll);
             NEXT_TURN_BUTTON.removeEventListener('click', endTurn);
             DISMISS_BUTTON.removeEventListener('click', dismissMessage);
-            CANCEL_BUTTON.removeEventListener('click', dismissMessage);
+            CANCEL_BUTTON.removeEventListener('click', handleRestartCancel); // Ensure cancel button is bound correctly for safety
             
             ROLL_BUTTON.addEventListener('click', handleRoll);
             NEXT_TURN_BUTTON.addEventListener('click', endTurn);
             DISMISS_BUTTON.addEventListener('click', dismissMessage);
-            CANCEL_BUTTON.addEventListener('click', dismissMessage);
+            CANCEL_BUTTON.addEventListener('click', handleRestartCancel); // Attach specific cancel handler
 
             document.getElementById('restart-button').addEventListener('click', promptRestartConfirmation);
             document.getElementById('stats-button').addEventListener('click', showStats);
