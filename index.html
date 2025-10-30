@@ -182,6 +182,10 @@
              padding: 2rem;
              width: 100%;
              max-width: 400px; /* Default max width */
+             /* FIX: Ensure content inside modal wrapper is centered vertically */
+             display: flex;
+             flex-direction: column;
+             justify-content: center;
         }
         
         /* Specific max-width for the Stats Modal */
@@ -293,12 +297,29 @@
                 </div>
             </div>
         </div>
+
+        <!-- Continue Game Modal (Hidden by default) -->
+        <div id="continue-modal" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center p-4 z-50">
+            <div class="modal-content text-center">
+                <h3 class="text-2xl font-bold mb-4 text-gray-100">Saved Game Found</h3>
+                <p class="text-lg mb-6">Do you want to continue your previous game?</p>
+                <div class="flex justify-center space-x-4">
+                    <button id="continue-saved-game" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg">
+                        Continue
+                    </button>
+                    <button id="start-new-game" class="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg">
+                        Start New
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        // --- CORE GAME LOGIC FUNCTIONS (Declared at top for hoisting safety) ---
+        // --- CORE GAME LOGIC FUNCTIONS (Hoisted for safe event listener attachment) ---
+
+        let pendingRestart = false; // State to track if the modal is a restart prompt
         
-        // Renamed from rollDice() to handleRoll() to match event listener
         function handleRoll() {
             if (rollsLeft > 0) {
                 // Increment stats
@@ -307,7 +328,7 @@
 
                 for (let i = 0; i < 5; i++) {
                     if (!diceHeld[i]) {
-                        diceValues[i] = Math.floor(Math.random() * 6) + 1; // 1 to 6
+                        diceValues[i] = Math.floor(Math.random() * 6) + 1;
                     }
                 }
                 rollsLeft--;
@@ -316,18 +337,17 @@
                 updateStatus();
                 highlightClaimableSpaces(); 
 
-                ROLL_BUTTON.disabled = true; // Disable roll temporarily
+                ROLL_BUTTON.disabled = true;
                 setTimeout(() => {
                     ROLL_BUTTON.disabled = rollsLeft === 0;
-                    // Next turn is enabled if no rolls left OR if current hand is BUST (allowing an early end)
                     NEXT_TURN_BUTTON.disabled = !(currentHandMatch === HAND_KEYS.BUST || rollsLeft === 0);
                 }, 500);
+                saveGame(); // AUTOSAVE after roll
             }
         }
         
         function endTurn() {
-            // Reset for next player
-            currentPlayer = currentPlayer === numPlayers ? 1 : currentPlayer + 1; // Cycle based on numPlayers
+            currentPlayer = currentPlayer === numPlayers ? 1 : currentPlayer + 1;
             rollsLeft = 3;
             diceHeld = [false, false, false, false, false];
             currentHandMatch = null;
@@ -338,17 +358,20 @@
             renderBoard();
             renderDice();
             updateStatus();
+            saveGame(); // AUTOSAVE after turn ends
         }
 
-        let pendingRestart = false; // State to track if the modal is a restart prompt
-
         function dismissMessage() {
-            document.getElementById('message-box').classList.add('hidden');
+            MESSAGE_BOX.classList.add('hidden');
             
-            if (gameWon || pendingRestart) {
-                // If game was won or player confirmed restart, go back to player selection screen
+            if (gameWon) {
+                clearSave(); // Clear save file on win
                 pendingRestart = false;
-                // Hide cancel button
+                document.getElementById('cancel-button').classList.add('hidden');
+                initGame(); 
+            } else if (pendingRestart) {
+                clearSave(); // Clear save file on confirmation
+                pendingRestart = false;
                 document.getElementById('cancel-button').classList.add('hidden');
                 initGame(); 
             }
@@ -358,176 +381,6 @@
             showMessage("Confirm Restart", "Are you sure you want to quit the current game and start over? All progress will be lost.", false, true);
         }
 
-        // --- UTILITY: DICE RENDERING ---
-        
-        // Generates an SVG representation of a single die face (1-6)
-        function getDiceDots(value, size = 100) {
-            
-            const positionMap = {
-                1: [[50, 50]],
-                2: [[25, 25], [75, 75]],
-                3: [[25, 25], [50, 50], [75, 75]],
-                4: [[25, 25], [25, 75], [75, 25], [75, 75]],
-                5: [[25, 25], [25, 75], [75, 25], [75, 75], [50, 50]],
-                6: [[25, 25], [25, 75], [75, 25], [75, 75], [50, 25], [50, 75]]
-            };
-
-            const dotRadius = size * 0.08;
-            let svgDots = '';
-            
-            if (positionMap[value]) {
-                positionMap[value].forEach(p => {
-                    svgDots += `<circle cx="${p[0]}" cy="${p[1]}" r="${dotRadius}" fill="#333" />`;
-                });
-            }
-
-            return `<svg viewBox="0 0 100 100" width="${size}" height="${size}">${svgDots}</svg>`;
-        }
-        
-        // **SIMPLE TEXT RENDERING FUNCTION**
-        function renderBoardHand(handString) {
-            // Simply returns the string content from the BOARD_DATA
-            return `<span>${handString}</span>`;
-        }
-
-        // --- GLOBAL STATE PLACEHOLDERS ---
-        const BOARD_DATA = [
-            ["Straight", "6 6 6 6", "6 6 5 5", "6 6 4 4", "1 1", "6 6 3 3", "6 6 2 2", "6 6 1 1", "Straight"],
-            ["6 6", "Fullhouse", "5 5 1 1", "5 5 2 2", "5 5 3 3", "5 5 4 4", "5 5 5 5", "Fullhouse", "4 4"],
-            ["4 4 4 4", "2 2 2", "Fullhouse", "4 4 3 3", "1 1 1 1", "4 4 2 2", "Fullhouse", "6 6 6", "4 4 1 1"],
-            ["4 4 4", "1 1 1", "3 3 3 3", "Fullhouse", "3 3 2 2", "Fullhouse", "3 3 1", "3 3 3", "5 5 5"],
-            ["Lucky 7", "1 1 2 2", "Lucky 11", "2 2 2 2", "FREE", "Lucky 11", "2 2 2 2", "1 1 2 2", "Lucky 7"],
-            ["5 5 5", "3 3 3", "1 3 3", "Fullhouse", "2 2 3 3", "Fullhouse", "3 3 3 3", "1 1 1", "4 4 4"],
-            ["1 1 4 4", "6 6 6", "Fullhouse", "2 2 4 4", "1 1 1 1", "3 3 4 4", "Fullhouse", "2 2 2", "4 4 4 4"],
-            ["4 4", "Fullhouse", "5 5 5 5", "4 4 5 5", "3 3 5 5", "2 2 5 5", "1 1 5 5", "Fullhouse", "6 6"],
-            ["Straight", "1 1 6 6", "2 2 6 6", "3 3 6 6", "2 2", "4 4 6 6", "5 5 6 6", "6 6 6 6", "Straight"] 
-        ];
-
-        let boardState = [];
-        let diceValues = [1, 1, 1, 1, 1];
-        let diceHeld = [false, false, false, false, false];
-        let currentPlayer = 1;
-        let rollsLeft = 3;
-        let currentHandMatch = null;
-        let gameWon = false; 
-        
-        // NEW STATE FOR PLAYER COUNT
-        let numPlayers = 3; 
-        let gameStats = {}; // Initialized in runGameSetup
-
-        // Player 1/2/3 Win Counts
-        let playerSequences = { 1: 0, 2: 0, 3: 0 };
-        const WIN_GOAL = 2;
-        
-        // Player Names and Colors 
-        let playerNames = { 1: 'Blue', 2: 'Red', 3: 'Green' }; 
-        
-        // DOM element variables that will be initialized in runGameSetup
-        let STATUS_DISPLAY, TURN_DISPLAY, ROLLS_DISPLAY, HAND_RESULT_DISPLAY, ROLL_BUTTON, NEXT_TURN_BUTTON, WIN_COUNT_DISPLAY, WIN_GOAL_TEXT, DISMISS_BUTTON, STATS_MODAL, MESSAGE_BOX;
-
-        // Standardized Hand Keys for Logic
-        const HAND_KEYS = {
-            'Straight': 'Straight',
-            'Fullhouse': 'Fullhouse',
-            'Lucky 7': 'Lucky 7',
-            'Lucky 11': 'Lucky 11',
-            'BUST': 'BUST',
-            'FREE': 'FREE'
-        };
-        
-        // --- GAME INITIALIZATION ---
-        
-        // Initial setup function called on window load
-        function initGame() {
-             // Show setup modal to choose player count
-            document.getElementById('setup-modal').classList.remove('hidden');
-        }
-        
-        // Starts the game after player count selection
-        function startGame(count) {
-            numPlayers = count;
-            document.getElementById('setup-modal').classList.add('hidden');
-            runGameSetup();
-        }
-        
-        function runGameSetup() {
-            // Initialize ALL persistent DOM elements safely here
-            STATUS_DISPLAY = document.getElementById('status-panel');
-            TURN_DISPLAY = document.getElementById('current-turn-display');
-            ROLLS_DISPLAY = document.getElementById('rolls-left-display');
-            HAND_RESULT_DISPLAY = document.getElementById('hand-result-display');
-            ROLL_BUTTON = document.getElementById('roll-button');
-            NEXT_TURN_BUTTON = document.getElementById('next-turn-button');
-            WIN_COUNT_DISPLAY = document.getElementById('win-count-display');
-            WIN_GOAL_TEXT = document.getElementById('win-goal-text');
-            DISMISS_BUTTON = document.getElementById('dismiss-button');
-            STATS_MODAL = document.getElementById('stats-modal');
-            MESSAGE_BOX = document.getElementById('message-box');
-            const CANCEL_BUTTON = document.getElementById('cancel-button'); // Local const for use here
-
-            // --- EVENT LISTENERS (FIX for ReferenceError) ---
-            ROLL_BUTTON.removeEventListener('click', handleRoll);
-            NEXT_TURN_BUTTON.removeEventListener('click', endTurn);
-            DISMISS_BUTTON.removeEventListener('click', dismissMessage);
-            CANCEL_BUTTON.removeEventListener('click', dismissMessage); // Clear old listeners if any
-            
-            ROLL_BUTTON.addEventListener('click', handleRoll);
-            NEXT_TURN_BUTTON.addEventListener('click', endTurn);
-            DISMISS_BUTTON.addEventListener('click', dismissMessage);
-            CANCEL_BUTTON.addEventListener('click', dismissMessage);
-
-            // NEW LISTENERS for stats and restart
-            document.getElementById('restart-button').addEventListener('click', promptRestartConfirmation);
-            document.getElementById('stats-button').addEventListener('click', showStats);
-            
-            // Listener for clicking outside the stats modal (only runs if STATS_MODAL is visible)
-            STATS_MODAL.addEventListener('click', closeModalsOnClickOutside);
-            // Listener for clicking outside the message modal
-            MESSAGE_BOX.addEventListener('click', closeModalsOnClickOutside);
-
-
-             // Initialize board state to 0 (unclaimed)
-            for (let r = 0; r < 9; r++) {
-                boardState[r] = [];
-                for (let c = 0; c < 9; c++) {
-                    boardState[r][c] = {
-                        owner: 0, // 0: Unclaimed, 1: P1, 2: P2, 3: P3
-                        hand: BOARD_DATA[r][c].trim(), // Trim whitespace
-                        inSequence: false // Flag to mark if chip is part of a sequence
-                    };
-                }
-            }
-
-            currentPlayer = 1;
-            rollsLeft = 3;
-            currentHandMatch = null;
-            diceValues = [1, 1, 1, 1, 1];
-            diceHeld = [false, false, false, false, false];
-            gameWon = false; 
-            
-            // Clear and reset sequence counters and stats based on numPlayers
-            playerSequences = {};
-            gameStats = { totalRolls: 0, successfulClaims: 0, rollsByPlayer: {}, claimsByPlayer: {} };
-
-            for (let i = 1; i <= numPlayers; i++) {
-                playerSequences[i] = 0;
-                gameStats.rollsByPlayer[i] = 0;
-                gameStats.claimsByPlayer[i] = 0;
-            }
-
-            // Update Header Text
-            WIN_GOAL_TEXT.textContent = `${WIN_GOAL} Runs to Win`;
-
-
-            renderBoard();
-            renderDice();
-            updateStatus();
-            ROLL_BUTTON.disabled = false;
-            NEXT_TURN_BUTTON.disabled = true;
-            MESSAGE_BOX.classList.add('hidden'); // Use MESSAGE_BOX variable
-        }
-        
-        // --- MODAL CLOSURE FIX ---
         function closeModalsOnClickOutside(event) {
             const modalId = event.currentTarget.id;
             const modalEl = event.currentTarget;
@@ -543,189 +396,6 @@
             }
         }
 
-        // --- RENDERING FUNCTIONS ---
-
-        function renderBoard() {
-            const boardEl = document.getElementById('game-board');
-            boardEl.innerHTML = '';
-            
-            for (let r = 0; r < 9; r++) {
-                for (let c = 0; c < 9; c++) {
-                    const cell = boardState[r][c];
-                    const cellEl = document.createElement('div');
-                    cellEl.className = 'board-cell rounded';
-                    cellEl.dataset.row = r;
-                    cellEl.dataset.col = c;
-                    
-                    // RENDER HAND AS ORIGINAL TEXT STRING
-                    cellEl.innerHTML = renderBoardHand(cell.hand);
-
-                    if (cell.owner > 0) {
-                        cellEl.classList.add('claimed');
-                        const chipLabel = playerNames[cell.owner].charAt(0); 
-                        cellEl.innerHTML = `<div class="player-chip player-${cell.owner}">${chipLabel}</div>`;
-                        cellEl.onclick = null;
-                        if (cell.inSequence) {
-                            cellEl.classList.add('in-sequence'); // Add gold border for sequenced chips
-                        } else {
-                            cellEl.classList.remove('in-sequence');
-                        }
-                    } else {
-                        // Only add click handler for unclaimed spaces
-                        cellEl.onclick = () => handleClaim(r, c);
-                        // Ensure highlight is removed if previously applied
-                        cellEl.classList.remove('claimable', 'in-sequence'); 
-                    }
-                    boardEl.appendChild(cellEl);
-                }
-            }
-        }
-        
-        function highlightClaimableSpaces() {
-            // First, clear all previous highlights
-            document.querySelectorAll('.claimable').forEach(el => el.classList.remove('claimable'));
-
-            if (!currentHandMatch || currentHandMatch === HAND_KEYS.BUST) return;
-
-            // Iterate over all cells to check for a match
-            for (let r = 0; r < 9; r++) {
-                for (let c = 0; c < 9; c++) {
-                    const cell = boardState[r][c];
-                    
-                    if (cell.owner === 0) { // Check only unclaimed spaces
-                        const spaceHand = cell.hand;
-                        let matched = false;
-
-                        // 1. Check FREE space
-                        if (spaceHand === HAND_KEYS.FREE) {
-                            matched = true;
-                        }
-                        // 2. Check for exact string match
-                        else if (spaceHand === currentHandMatch) {
-                            matched = true;
-                        } 
-                        
-                        if (matched) {
-                            const cellEl = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
-                            if (cellEl) {
-                                cellEl.classList.add('claimable');
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        function renderDice() {
-            const diceAreaEl = document.getElementById('dice-area');
-            diceAreaEl.innerHTML = '';
-            
-            diceValues.forEach((value, index) => {
-                const diceEl = document.createElement('div');
-                diceEl.className = `dice ${diceHeld[index] ? 'dice-held' : 'bg-gray-200'}`;
-                diceEl.innerHTML = getDiceDots(value, 40); // 40px die size
-                diceEl.onclick = () => toggleDiceHold(index);
-                diceAreaEl.appendChild(diceEl);
-            });
-        }
-
-        function updateStatus() {
-            const name = playerNames[currentPlayer];
-            const color = name;
-            TURN_DISPLAY.textContent = `${name}'s Turn (${color} Chip)`;
-            ROLLS_DISPLAY.textContent = `Rolls Remaining: ${rollsLeft}`;
-            
-            let winCountHtml = `Sequences: `;
-            for(let i = 1; i <= numPlayers; i++) {
-                 // Use the player's color index for text color
-                 const colorClass = i === 1 ? 'text-blue-400' : (i === 2 ? 'text-red-400' : 'text-green-400');
-                 winCountHtml += `<span class="${colorClass} mx-2">${playerNames[i]} (${playerSequences[i]})</span>`;
-            }
-            WIN_COUNT_DISPLAY.innerHTML = winCountHtml;
-
-
-            if (currentHandMatch) {
-                // Display current hand match (using its string representation)
-                HAND_RESULT_DISPLAY.textContent = `Hand: ${currentHandMatch}`;
-                HAND_RESULT_DISPLAY.classList.remove('text-red-700', 'text-green-700', 'text-yellow-700');
-                
-                if (currentHandMatch === HAND_KEYS.BUST) {
-                    HAND_RESULT_DISPLAY.classList.add('text-red-700');
-                } else if (currentHandMatch === HAND_KEYS['Lucky 7'] || currentHandMatch === HAND_KEYS['Lucky 11']) {
-                     HAND_RESULT_DISPLAY.classList.add('text-yellow-700');
-                } else {
-                    // All other valid hands (Straight, Fullhouse, or specific number pairs/multiples)
-                    HAND_RESULT_DISPLAY.classList.add('text-green-700');
-                }
-            } else if (rollsLeft === 3) {
-                HAND_RESULT_DISPLAY.textContent = 'Roll to start!';
-                HAND_RESULT_DISPLAY.classList.remove('text-red-700', 'text-green-700', 'text-yellow-700');
-            } else {
-                HAND_RESULT_DISPLAY.textContent = 'Hold dice and Roll again or End Turn.';
-                HAND_RESULT_DISPLAY.classList.remove('text-red-700', 'text-green-700', 'text-yellow-700');
-            }
-
-            // --- DYNAMIC BUTTON COLOR CHANGE FIX ---
-            const rollButtonEl = document.getElementById('roll-button');
-            
-            // Define all possible background and hover classes used for player colors
-            const allColorClasses = [
-                'bg-blue-600', 'hover:bg-blue-700',
-                'bg-red-600', 'hover:bg-red-700',
-                'bg-green-600', 'hover:bg-green-700'
-            ];
-
-            // Define the specific class sets for the current player
-            const playerColors = {
-                1: ['bg-blue-600', 'hover:bg-blue-700'],
-                2: ['bg-red-600', 'hover:bg-red-700'],
-                3: ['bg-green-600', 'hover:bg-green-700']
-            };
-
-            // 1. Remove all potential player color classes
-            rollButtonEl.classList.remove(...allColorClasses);
-
-            // 2. Add current player's color class
-            if (playerColors[currentPlayer]) {
-                rollButtonEl.classList.add(...playerColors[currentPlayer]);
-            }
-            // ------------------------------------
-
-            ROLL_BUTTON.textContent = `Roll Dice (${rollsLeft} Left)`;
-            if (rollsLeft === 0) {
-                ROLL_BUTTON.disabled = true;
-                ROLL_BUTTON.textContent = 'No Rolls Left';
-            }
-        }
-
-        function showMessage(title, text, isWinner = false, isConfirmation = false) {
-            document.getElementById('message-title').textContent = title;
-            document.getElementById('message-text').textContent = text;
-            MESSAGE_BOX.classList.remove('hidden'); // Use MESSAGE_BOX variable
-            gameWon = isWinner; 
-            pendingRestart = isConfirmation;
-            
-            const dismissButton = document.getElementById('dismiss-button');
-            const cancelButton = document.getElementById('cancel-button');
-
-            // Reset buttons to default appearance
-            dismissButton.classList.remove('bg-red-600', 'hover:bg-red-700');
-            dismissButton.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
-            cancelButton.classList.add('hidden');
-
-            if (isConfirmation) {
-                dismissButton.textContent = 'Yes, Restart';
-                dismissButton.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
-                dismissButton.classList.add('bg-red-600', 'hover:bg-red-700');
-                cancelButton.classList.remove('hidden');
-            } else {
-                dismissButton.textContent = isWinner ? 'Start New Game' : 'OK';
-            }
-        }
-
-
-        // --- DICE LOGIC ---
-        
         function toggleDiceHold(index) {
             if (rollsLeft < 3) {
                 diceHeld[index] = !diceHeld[index];
@@ -733,53 +403,148 @@
             }
         }
 
-        // --- HAND CHECKING LOGIC ---
+        // --- CONSTANTS AND STATE ---
+
+        const SAVE_KEY = 'dicePokerSequenceSave';
+        const BOARD_DATA = [
+            ["Straight", "6 6 6 6", "6 6 5 5", "6 6 4 4", "1 1", "6 6 3 3", "6 6 2 2", "6 6 1 1", "Straight"],
+            ["6 6", "Fullhouse", "5 5 1 1", "5 5 2 2", "5 5 3 3", "5 5 4 4", "5 5 5 5", "Fullhouse", "4 4"],
+            ["4 4 4 4", "2 2 2", "Fullhouse", "4 4 3 3", "1 1 1 1", "4 4 2 2", "Fullhouse", "6 6 6", "4 4 1 1"],
+            ["4 4 4", "1 1 1", "3 3 3 3", "Fullhouse", "3 3 2 2", "Fullhouse", "3 3 1", "3 3 3", "5 5 5"],
+            ["Lucky 7", "1 1 2 2", "Lucky 11", "2 2 2 2", "FREE", "Lucky 11", "2 2 2 2", "1 1 2 2", "Lucky 7"],
+            ["5 5 5", "3 3 3", "1 3 3", "Fullhouse", "2 2 3 3", "Fullhouse", "3 3 3 3", "1 1 1", "4 4 4"],
+            ["1 1 4 4", "6 6 6", "Fullhouse", "2 2 4 4", "1 1 1 1", "3 3 4 4", "Fullhouse", "2 2 2", "4 4 4 4"],
+            ["4 4", "Fullhouse", "5 5 5 5", "4 4 5 5", "3 3 5 5", "2 2 5 5", "1 1 5 5", "Fullhouse", "6 6"],
+            ["Straight", "1 1 6 6", "2 2 6 6", "3 3 6 6", "2 2", "4 4 6 6", "5 5 6 6", "6 6 6 6", "Straight"] 
+        ];
+
+        const HAND_KEYS = {
+            'Straight': 'Straight', 'Fullhouse': 'Fullhouse', 'Lucky 7': 'Lucky 7', 'Lucky 11': 'Lucky 11',
+            'BUST': 'BUST', 'FREE': 'FREE'
+        };
+        const WIN_GOAL = 2;
+        const playerNames = { 1: 'Blue', 2: 'Red', 3: 'Green' }; 
         
+        let boardState = [];
+        let diceValues = [1, 1, 1, 1, 1];
+        let diceHeld = [false, false, false, false, false];
+        let currentPlayer = 1;
+        let rollsLeft = 3;
+        let currentHandMatch = null;
+        let gameWon = false; 
+        let numPlayers = 3; 
+        let playerSequences = { 1: 0, 2: 0, 3: 0 };
+        let gameStats = {}; 
+        
+        // DOM element variables
+        let STATUS_DISPLAY, TURN_DISPLAY, ROLLS_DISPLAY, HAND_RESULT_DISPLAY, ROLL_BUTTON, NEXT_TURN_BUTTON, WIN_COUNT_DISPLAY, WIN_GOAL_TEXT, DISMISS_BUTTON, STATS_MODAL, MESSAGE_BOX, CONTINUE_MODAL;
+
+        // --- AUTOSAVE/LOAD LOGIC ---
+        function saveGame() {
+            const data = {
+                boardState: boardState,
+                diceValues: diceValues,
+                diceHeld: diceHeld,
+                currentPlayer: currentPlayer,
+                rollsLeft: rollsLeft,
+                currentHandMatch: currentHandMatch,
+                gameWon: gameWon,
+                numPlayers: numPlayers,
+                playerSequences: playerSequences,
+                gameStats: gameStats
+            };
+            localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+        }
+
+        function loadGame() {
+            const savedData = localStorage.getItem(SAVE_KEY);
+            if (!savedData) return false;
+            
+            try {
+                const data = JSON.parse(savedData);
+                
+                // Restore state from saved data
+                boardState = data.boardState;
+                diceValues = data.diceValues;
+                diceHeld = data.diceHeld;
+                currentPlayer = data.currentPlayer;
+                rollsLeft = data.rollsLeft;
+                currentHandMatch = data.currentHandMatch;
+                gameWon = data.gameWon;
+                numPlayers = data.numPlayers;
+                playerSequences = data.playerSequences;
+                gameStats = data.gameStats;
+                
+                // Data sanity check
+                if (!boardState || boardState.length !== 9) return false;
+
+                return true;
+            } catch (e) {
+                console.error("Error loading game state:", e);
+                localStorage.removeItem(SAVE_KEY); // Clear corrupted save
+                return false;
+            }
+        }
+        
+        function clearSave() {
+            localStorage.removeItem(SAVE_KEY);
+        }
+
+        // --- UTILITY FUNCTIONS ---
+
+        function getDiceDots(value, size = 100) {
+            const positionMap = {
+                1: [[50, 50]], 2: [[25, 25], [75, 75]], 3: [[25, 25], [50, 50], [75, 75]],
+                4: [[25, 25], [25, 75], [75, 25], [75, 75]], 5: [[25, 25], [25, 75], [75, 25], [75, 75], [50, 50]],
+                6: [[25, 25], [25, 75], [75, 25], [75, 75], [50, 25], [50, 75]]
+            };
+            const dotRadius = size * 0.08;
+            let svgDots = '';
+            if (positionMap[value]) {
+                positionMap[value].forEach(p => {
+                    svgDots += `<circle cx="${p[0]}" cy="${p[1]}" r="${dotRadius}" fill="#333" />`;
+                });
+            }
+            return `<svg viewBox="0 0 100 100" width="${size}" height="${size}">${svgDots}</svg>`;
+        }
+        
+        function renderBoardHand(handString) {
+            return `<span>${handString}</span>`;
+        }
+
         function getHandString(values, type) {
-            // Generates the specific string (e.g., "6 6 5 5") for board matching
-            
             if (type === '5K') return `${values[0]} ${values[0]} ${values[0]} ${values[0]} ${values[0]}`;
-            
             if (type === '4K') {
                 const four = values.find(v => values.filter(x => x === v).length === 4);
                 return `${four} ${four} ${four} ${four}`;
             }
-
             if (type === '3K') {
                 const three = values.find(v => values.filter(x => x === v).length === 3);
                 return `${three} ${three} ${three}`;
             }
-
             if (type === '2P') {
                 const counts = {};
                 values.forEach(val => { counts[val] = (counts[val] || 0) + 1; });
                 const pairs = Object.keys(counts).filter(k => counts[k] === 2).sort((a, b) => Number(b) - Number(a)); 
                 return `${pairs[0]} ${pairs[0]} ${pairs[1]} ${pairs[1]}`; 
             }
-
             if (type === '1P') {
                 const pair = values.find(v => values.filter(x => x === v).length === 2);
                 return `${pair} ${pair}`;
             }
-            
             return ''; 
         }
         
         function checkHand() {
             const counts = {};
             let sum = 0;
-            diceValues.forEach(val => {
-                counts[val] = (counts[val] || 0) + 1;
-                sum += val;
-            });
+            diceValues.forEach(val => { counts[val] = (counts[val] || 0) + 1; sum += val; });
             const numUnique = Object.keys(counts).length;
             const values = Object.values(counts);
 
-            // 1. SPECIAL SUM HANDS
             if (sum === 7) { currentHandMatch = HAND_KEYS['Lucky 7']; return; }
             if (sum === 11) { currentHandMatch = HAND_KEYS['Lucky 11']; return; }
 
-            // 2. POKER HANDS
             let handType = null;
             if (values.includes(5)) { handType = '5K'; } 
             else if (values.includes(4)) { handType = '4K'; } 
@@ -794,7 +559,6 @@
             else if (values.includes(2) && numUnique === 4) { handType = '1P'; } 
             else { handType = 'BUST'; }
 
-            // Map hand type to board string/key
             if (handType === 'Straight') { currentHandMatch = HAND_KEYS.Straight; } 
             else if (handType === 'FH') { currentHandMatch = HAND_KEYS.Fullhouse; } 
             else if (handType === 'BUST') { currentHandMatch = HAND_KEYS.BUST; } 
@@ -804,7 +568,7 @@
                  currentHandMatch = HAND_KEYS.BUST; 
             }
         }
-
+        
         // --- GAME FLOW HANDLERS ---
 
         function handleClaim(r, c) {
@@ -822,36 +586,25 @@
             let matched = (spaceHand === HAND_KEYS.FREE || spaceHand === currentHandMatch);
             
             if (matched) {
-                // Increment claim stats
                 gameStats.successfulClaims++;
                 gameStats.claimsByPlayer[currentPlayer]++;
                 
-                const oldOwner = boardState[r][c].owner;
-                
-                // 1. Permanently claim the space
                 boardState[r][c].owner = currentPlayer;
                 
-                // 2. Get the list of all sequences the player owns, including the new chip
                 const sequencesFound = findSequences(currentPlayer);
                 const newSequenceCount = sequencesFound.length;
                 
-                // Check if the chip claim resulted in a new, uncounted sequence
                 if (newSequenceCount > playerSequences[currentPlayer]) {
-                    // A new sequence was created.
-
-                    // Clear ALL 'inSequence' markers for the current player's chips
                     boardState.forEach(row => row.forEach(cell => {
                         if (cell.owner === currentPlayer) cell.inSequence = false;
                     }));
                     
-                    // Mark cells in the newly discovered sequences
                     sequencesFound.forEach(seq => {
                         seq.cells.forEach(cellCoords => {
                             boardState[cellCoords.r][cellCoords.c].inSequence = true;
                         });
                     });
 
-                    // Update the permanent sequence count
                     playerSequences[currentPlayer] = newSequenceCount;
                     
                     if (playerSequences[currentPlayer] >= WIN_GOAL) {
@@ -860,14 +613,135 @@
                     }
                 }
                 
-                // 3. End turn after a successful claim (even if it wasn't a new sequence)
                 endTurn();
             } else {
                 showMessage("Invalid Claim", `Your current hand (${currentHandMatch || 'None'}) does not match the space: ${spaceHand}.`);
             }
         }
+        
+        // --- UI/RENDERING ---
+        
+        function renderBoard() {
+            const boardEl = document.getElementById('game-board');
+            boardEl.innerHTML = '';
+            
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cell = boardState[r][c];
+                    const cellEl = document.createElement('div');
+                    cellEl.className = 'board-cell rounded';
+                    cellEl.dataset.row = r;
+                    cellEl.dataset.col = c;
+                    cellEl.innerHTML = renderBoardHand(cell.hand);
 
-        // --- STATS LOGIC ---
+                    if (cell.owner > 0) {
+                        cellEl.classList.add('claimed');
+                        const chipLabel = playerNames[cell.owner].charAt(0); 
+                        cellEl.innerHTML = `<div class="player-chip player-${cell.owner}">${chipLabel}</div>`;
+                        cellEl.onclick = null;
+                        if (cell.inSequence) {
+                            cellEl.classList.add('in-sequence'); 
+                        } else {
+                            cellEl.classList.remove('in-sequence');
+                        }
+                    } else {
+                        cellEl.onclick = () => handleClaim(r, c);
+                        cellEl.classList.remove('claimable', 'in-sequence'); 
+                    }
+                    boardEl.appendChild(cellEl);
+                }
+            }
+        }
+        
+        function highlightClaimableSpaces() {
+            document.querySelectorAll('.claimable').forEach(el => el.classList.remove('claimable'));
+            if (!currentHandMatch || currentHandMatch === HAND_KEYS.BUST) return;
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cell = boardState[r][c];
+                    if (cell.owner === 0) { 
+                        const spaceHand = cell.hand;
+                        let matched = (spaceHand === HAND_KEYS.FREE || spaceHand === currentHandMatch);
+                        
+                        if (matched) {
+                            const cellEl = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+                            if (cellEl) {
+                                cellEl.classList.add('claimable');
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        function renderDice() {
+            const diceAreaEl = document.getElementById('dice-area');
+            diceAreaEl.innerHTML = '';
+            diceValues.forEach((value, index) => {
+                const diceEl = document.createElement('div');
+                diceEl.className = `dice ${diceHeld[index] ? 'dice-held' : 'bg-gray-200'}`;
+                diceEl.innerHTML = getDiceDots(value, 40); 
+                diceEl.onclick = () => toggleDiceHold(index);
+                diceAreaEl.appendChild(diceEl);
+            });
+        }
+
+        function updateStatus() {
+            const name = playerNames[currentPlayer];
+            const color = name;
+            TURN_DISPLAY.textContent = `${name}'s Turn (${color} Chip)`;
+            ROLLS_DISPLAY.textContent = `Rolls Remaining: ${rollsLeft}`;
+            
+            let winCountHtml = `Sequences: `;
+            for(let i = 1; i <= numPlayers; i++) {
+                 const colorClass = i === 1 ? 'text-blue-400' : (i === 2 ? 'text-red-400' : 'text-green-400');
+                 winCountHtml += `<span class="${colorClass} mx-2">${playerNames[i]} (${playerSequences[i]})</span>`;
+            }
+            WIN_COUNT_DISPLAY.innerHTML = winCountHtml;
+
+            if (currentHandMatch) {
+                HAND_RESULT_DISPLAY.textContent = `Hand: ${currentHandMatch}`;
+                HAND_RESULT_DISPLAY.classList.remove('text-red-700', 'text-green-700', 'text-yellow-700');
+                if (currentHandMatch === HAND_KEYS.BUST) {
+                    HAND_RESULT_DISPLAY.classList.add('text-red-700');
+                } else if (currentHandMatch === HAND_KEYS['Lucky 7'] || currentHandMatch === HAND_KEYS['Lucky 11']) {
+                     HAND_RESULT_DISPLAY.classList.add('text-yellow-700');
+                } else {
+                    HAND_RESULT_DISPLAY.classList.add('text-green-700');
+                }
+            } else if (rollsLeft === 3) {
+                HAND_RESULT_DISPLAY.textContent = 'Roll to start!';
+                HAND_RESULT_DISPLAY.classList.remove('text-red-700', 'text-green-700', 'text-yellow-700');
+            } else {
+                HAND_RESULT_DISPLAY.textContent = 'Hold dice and Roll again or End Turn.';
+                HAND_RESULT_DISPLAY.classList.remove('text-red-700', 'text-green-700', 'text-yellow-700');
+            }
+
+            const rollButtonEl = document.getElementById('roll-button');
+            const allColorClasses = [
+                'bg-blue-600', 'hover:bg-blue-700', 'bg-red-600', 'hover:bg-red-700', 'bg-green-600', 'hover:bg-green-700'
+            ];
+            const playerColors = {
+                1: ['bg-blue-600', 'hover:bg-blue-700'],
+                2: ['bg-red-600', 'hover:bg-red-700'],
+                3: ['bg-green-600', 'hover:bg-green-700']
+            };
+
+            rollButtonEl.classList.remove(...allColorClasses);
+
+            if (playerColors[currentPlayer]) {
+                rollButtonEl.classList.add(...playerColors[currentPlayer]);
+            }
+            ROLL_BUTTON.textContent = `Roll Dice (${rollsLeft} Left)`;
+            if (rollsLeft === 0) {
+                ROLL_BUTTON.disabled = true;
+                ROLL_BUTTON.textContent = 'No Rolls Left';
+            }
+        }
+        
+        // --- STATS / SEQUENCE CHECKING ---
+        
         function showStats() {
             const statsContentEl = document.getElementById('stats-content');
             let html = `
@@ -904,16 +778,10 @@
             STATS_MODAL.classList.remove('hidden');
         }
 
-
-        // --- WIN CONDITION CHECK (Refactored for Multiple Sequences) ---
-        
-        // This function returns an array of found unique sequence objects for the player
         function findSequences(player) {
-            const sequencesFound = []; // Stores unique cell combinations forming a sequence
+            const sequencesFound = [];
             const N = 9;
             const WIN_LENGTH = 5;
-
-            // Directions: [d_row, d_col]
             const directions = [[0, 1], [1, 0], [1, 1], [1, -1]]; 
             
             directions.forEach(([dr, dc]) => {
@@ -921,7 +789,6 @@
                     for (let j = 0; j < N; j++) {
                         let currentSeq = [];
                         
-                        // Check for WIN_LENGTH length sequence starting at (i, j)
                         for (let k = 0; k < WIN_LENGTH; k++) {
                             const currR = i + k * dr;
                             const currC = j + k * dc;
@@ -933,7 +800,6 @@
                             
                             const cell = boardState[currR][currC];
                             if (cell.owner === player || cell.hand === HAND_KEYS.FREE) {
-                                // Push coordinates for later reference
                                 currentSeq.push({r: currR, c: currC}); 
                             } else {
                                 currentSeq = [];
@@ -942,11 +808,7 @@
                         }
 
                         if (currentSeq.length === WIN_LENGTH) {
-                            // Sequence found: hash it and add if unique
-                            // Hash based on sorted coordinates to handle overlapping sequence detection
                             const hash = currentSeq.map(cell => `${cell.r},${cell.c}`).sort().join('|');
-                            
-                            // Check if this exact sequence (based on cell coordinates) has already been found
                             if (!sequencesFound.some(seq => seq.hash === hash)) {
                                 sequencesFound.push({ hash: hash, cells: currentSeq });
                             }
@@ -958,7 +820,113 @@
             return sequencesFound;
         }
 
-        // --- START GAME ---
+        // --- GAME INITIALIZATION & SETUP ---
+
+        function initGame() {
+            if (loadGame()) {
+                 // Saved game found, show the continue prompt
+                CONTINUE_MODAL.classList.remove('hidden');
+                document.getElementById('continue-saved-game').onclick = () => {
+                    CONTINUE_MODAL.classList.add('hidden');
+                    runGameSetup(true); // Load saved game
+                };
+                document.getElementById('start-new-game').onclick = () => {
+                    CONTINUE_MODAL.classList.add('hidden');
+                    clearSave(); // Clear save file
+                    document.getElementById('setup-modal').classList.remove('hidden'); // Show player count selection
+                };
+            } else {
+                 // No saved game, show player count selection
+                document.getElementById('setup-modal').classList.remove('hidden');
+            }
+        }
+        
+        function startGame(count) {
+            numPlayers = count;
+            document.getElementById('setup-modal').classList.add('hidden');
+            runGameSetup(false); // Start new game
+        }
+        
+        function runGameSetup(isLoad = false) {
+            // Initialize DOM elements
+            STATUS_DISPLAY = document.getElementById('status-panel');
+            TURN_DISPLAY = document.getElementById('current-turn-display');
+            ROLLS_DISPLAY = document.getElementById('rolls-left-display');
+            HAND_RESULT_DISPLAY = document.getElementById('hand-result-display');
+            ROLL_BUTTON = document.getElementById('roll-button');
+            NEXT_TURN_BUTTON = document.getElementById('next-turn-button');
+            WIN_COUNT_DISPLAY = document.getElementById('win-count-display');
+            WIN_GOAL_TEXT = document.getElementById('win-goal-text');
+            DISMISS_BUTTON = document.getElementById('dismiss-button');
+            STATS_MODAL = document.getElementById('stats-modal');
+            MESSAGE_BOX = document.getElementById('message-box');
+            CONTINUE_MODAL = document.getElementById('continue-modal');
+            const CANCEL_BUTTON = document.getElementById('cancel-button'); 
+
+            // --- EVENT LISTENERS ---
+            ROLL_BUTTON.removeEventListener('click', handleRoll);
+            NEXT_TURN_BUTTON.removeEventListener('click', endTurn);
+            DISMISS_BUTTON.removeEventListener('click', dismissMessage);
+            CANCEL_BUTTON.removeEventListener('click', dismissMessage);
+            
+            ROLL_BUTTON.addEventListener('click', handleRoll);
+            NEXT_TURN_BUTTON.addEventListener('click', endTurn);
+            DISMISS_BUTTON.addEventListener('click', dismissMessage);
+            CANCEL_BUTTON.addEventListener('click', dismissMessage);
+
+            document.getElementById('restart-button').addEventListener('click', promptRestartConfirmation);
+            document.getElementById('stats-button').addEventListener('click', showStats);
+            
+            STATS_MODAL.addEventListener('click', closeModalsOnClickOutside);
+            MESSAGE_BOX.addEventListener('click', closeModalsOnClickOutside);
+
+            if (!isLoad) {
+                // Initialize NEW board state and stats
+                for (let r = 0; r < 9; r++) {
+                    boardState[r] = [];
+                    for (let c = 0; c < 9; c++) {
+                        boardState[r][c] = {
+                            owner: 0, hand: BOARD_DATA[r][c].trim(), inSequence: false
+                        };
+                    }
+                }
+                currentPlayer = 1;
+                rollsLeft = 3;
+                currentHandMatch = null;
+                diceValues = [1, 1, 1, 1, 1];
+                diceHeld = [false, false, false, false, false];
+                gameWon = false; 
+                playerSequences = {};
+                gameStats = { totalRolls: 0, successfulClaims: 0, rollsByPlayer: {}, claimsByPlayer: {} };
+
+                for (let i = 1; i <= numPlayers; i++) {
+                    playerSequences[i] = 0;
+                    gameStats.rollsByPlayer[i] = 0;
+                    gameStats.claimsByPlayer[i] = 0;
+                }
+                clearSave(); // Ensure a clean start wipes the old save
+            } else {
+                 // Game loaded successfully, render the saved state
+                 
+                 // Re-attach inSequence flags based on current state (needed because sequences are transient)
+                 const sequencesFound = findSequences(currentPlayer);
+                 sequencesFound.forEach(seq => {
+                    seq.cells.forEach(cellCoords => {
+                        boardState[cellCoords.r][cellCoords.c].inSequence = true;
+                    });
+                });
+            }
+
+            WIN_GOAL_TEXT.textContent = `${WIN_GOAL} Runs to Win`;
+            renderBoard();
+            renderDice();
+            updateStatus();
+            ROLL_BUTTON.disabled = false;
+            NEXT_TURN_BUTTON.disabled = true;
+            MESSAGE_BOX.classList.add('hidden');
+            CONTINUE_MODAL.classList.add('hidden');
+        }
+        
         window.onload = initGame;
     </script>
 </body>
