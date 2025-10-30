@@ -93,6 +93,7 @@
             cursor: pointer;
             height: 100%;
             width: 100%;
+            position: relative; /* Needed for absolute positioning of corner chip */
         }
         /* Style for the text/word icons inside the cell (e.g., Straight, FREE) */
         .board-cell span {
@@ -117,7 +118,7 @@
         
         /* Style the actual emoji dice small inside the cell */
         .board-cell .dice-emoji {
-            font-size: 1.1rem; 
+            font-size: 1.3rem; /* Increased size for visibility */
             line-height: 1;
             padding: 0;
             margin: 0;
@@ -187,6 +188,23 @@
             border: 2px solid #FFD700; /* Gold border */
             box-shadow: 0 0 5px #FFD700;
         }
+        
+        /* NEW: Base Corner Chip Style */
+        .corner-chip {
+            position: absolute;
+            width: 30%; /* Smaller size */
+            height: 30%;
+            z-index: 10; /* Ensure chip is on top of the text */
+            font-size: 0.75rem; /* Smaller text on chip */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+            border: 1px solid #111827;
+        }
+
+        /* Define specific corner positions for the FREE space */
+        .corner-chip.p1 { top: 2px; left: 2px; }   /* Blue: Top-Left */
+        .corner-chip.p2 { top: 2px; right: 2px; }  /* Red: Top-Right */
+        .corner-chip.p3 { bottom: 2px; left: 2px; } /* Green: Bottom-Left */
+
 
         .control-button {
             transition: background-color 0.15s, transform 0.1s;
@@ -258,6 +276,10 @@
             }
             .board-cell .house-emoji {
                 font-size: 1.6rem; 
+            }
+            .corner-chip {
+                width: 25%; 
+                height: 25%;
             }
         }
     </style>
@@ -407,7 +429,7 @@
                 ROLL_BUTTON.disabled = true;
                 setTimeout(() => {
                     ROLL_BUTTON.disabled = rollsLeft === 0;
-                    NEXT_TURN_BUTTON.disabled = !(currentHandMatch === HAND_KEYS.BUST || rollsLeft === 0);
+                    NEXT_TURN_BUTTON.disabled = false; // Always allow End Turn after roll
                 }, 500);
                 saveGame(); // AUTOSAVE after roll
             }
@@ -597,7 +619,26 @@
                 const data = JSON.parse(savedData);
                 
                 // Restore state from saved data
-                boardState = data.boardState;
+                // --- CRITICAL FIX FOR FREE SPACE LOADING ---
+                // Must handle the old 'owner: 0' structure and the new 'claimedBy: []' array structure
+                
+                // 1. Initialize empty board with correct structure for FREE space
+                let loadedBoardState = [];
+                for (let r = 0; r < 9; r++) {
+                    loadedBoardState[r] = [];
+                    for (let c = 0; c < 9; c++) {
+                         let cellData = data.boardState[r][c];
+                         if (cellData.hand === HAND_KEYS.FREE) {
+                             // If loading the FREE space, ensure it has the claimedBy array
+                             cellData.claimedBy = cellData.claimedBy || (cellData.owner ? [cellData.owner] : []);
+                             // Ensure consistency: If claimedBy has players, set owner to 1 (or the first player) for render logic to kick in
+                             cellData.owner = cellData.claimedBy.length > 0 ? cellData.claimedBy[cellData.claimedBy.length - 1] : 0;
+                         }
+                         loadedBoardState[r][c] = cellData;
+                    }
+                }
+                boardState = loadedBoardState;
+
                 diceValues = data.diceValues;
                 diceHeld = data.diceHeld;
                 currentPlayer = data.currentPlayer;
@@ -624,6 +665,27 @@
         }
 
         // --- UTILITY FUNCTIONS ---
+        
+        /**
+         * Standardizes a hand string (e.g., "5 5 3 3") by sorting the numbers.
+         * This allows "3 3 5 5" to match "5 5 3 3".
+         * @param {string} handString - The hand string from the board or current roll.
+         * @returns {string} The standardized, sorted hand string, or the original if it's a keyword.
+         */
+        function standardizeHandString(handString) {
+            // Do not standardize keywords like Fullhouse, Straight, Lucky 7, etc.
+            if (Object.values(HAND_KEYS).includes(handString)) {
+                return handString;
+            }
+
+            // Split, convert to numbers, sort ascending, and rejoin as a string
+            return handString.trim()
+                .split(/\s+/) // Split by any whitespace
+                .map(Number)
+                .sort((a, b) => a - b)
+                .join(' ');
+        }
+        
 
         function getDiceDots(value) {
              // Use Unicode dice characters for better mobile scaling and rendering consistency
@@ -668,26 +730,37 @@
         }
 
         function getHandString(values, type) {
+            // This function creates the raw string representing the dice values
             if (type === '5K') return `${values[0]} ${values[0]} ${values[0]} ${values[0]} ${values[0]}`;
-            if (type === '4K') {
-                const four = values.find(v => values.filter(x => x === v).length === 4);
-                return `${four} ${four} ${four} ${four}`;
-            }
-            if (type === '3K') {
-                const three = values.find(v => values.filter(x => x === v).length === 3);
-                return `${three} ${three} ${three}`;
-            }
-            if (type === '2P') {
-                const counts = {};
-                values.forEach(val => { counts[val] = (counts[val] || 0) + 1; });
-                const pairs = Object.keys(counts).filter(k => counts[k] === 2).sort((a, b) => Number(b) - Number(a)); 
-                return `${pairs[0]} ${pairs[0]} ${pairs[1]} ${pairs[1]}`; 
-            }
-            if (type === '1P') {
-                const pair = values.find(v => values.filter(x => x === v).length === 2);
-                return `${pair} ${pair}`;
-            }
-            return ''; 
+            
+            const grouped = {};
+            values.forEach(v => grouped[v] = (grouped[v] || 0) + 1);
+            
+            let handParts = [];
+
+            // Sort by count (descending) then by value (descending) to get a predictable string, 
+            // but the final match will rely on standardizeHandString anyway.
+            const sortedKeys = Object.keys(grouped).sort((a, b) => {
+                if (grouped[b] !== grouped[a]) return grouped[b] - grouped[a];
+                return Number(b) - Number(a);
+            });
+
+            sortedKeys.forEach(key => {
+                for (let i = 0; i < grouped[key]; i++) {
+                    handParts.push(key);
+                }
+            });
+            
+            // Use only the relevant dice for the match string (e.g., 4K needs 4 dice, 2P needs 4 dice)
+            if (type === '4K') handParts = handParts.slice(0, 4);
+            else if (type === 'FH') handParts = handParts.slice(0, 5);
+            else if (type === '3K') handParts = handParts.slice(0, 3);
+            else if (type === '2P') handParts = handParts.slice(0, 4);
+            else if (type === '1P') handParts = handParts.slice(0, 2);
+            else return handParts.join(' ');
+
+
+            return handParts.join(' ');
         }
         
         function checkHand() {
@@ -718,7 +791,8 @@
             else if (handType === 'FH') { currentHandMatch = HAND_KEYS.Fullhouse; } 
             else if (handType === 'BUST') { currentHandMatch = HAND_KEYS.BUST; } 
             else if (['5K', '4K', '3K', '2P', '1P'].includes(handType)) {
-                currentHandMatch = getHandString(diceValues, handType);
+                // Return the standardized (sorted) string for non-keyword hands
+                currentHandMatch = standardizeHandString(getHandString(diceValues, handType));
             } else {
                  currentHandMatch = HAND_KEYS.BUST; 
             }
@@ -732,26 +806,58 @@
                 return;
             }
             
-            if (currentHandMatch === HAND_KEYS.BUST) {
-                showMessage("BUST!", "A BUST hand cannot be used to claim any space. Please end your turn.");
-                return;
+            const cell = boardState[r][c];
+            const spaceHand = cell.hand;
+            
+            // --- Determine Claim Validity ---
+            let isFreeSpace = spaceHand === HAND_KEYS.FREE;
+            let canClaim = false;
+
+            if (isFreeSpace) {
+                // Rule: FREE space can be claimed by any player, even if claimed by another, 
+                // regardless of roll quality (non-BUST roll required).
+                if (currentHandMatch !== HAND_KEYS.BUST) {
+                     canClaim = true; 
+                } else {
+                     showMessage("Invalid Claim", "A BUST hand cannot claim the FREE space.");
+                     return;
+                }
+
+            } else {
+                // Rule: Non-FREE space requires a match and must be UNCLAIMED
+                if (cell.owner === 0 && currentHandMatch !== HAND_KEYS.BUST) {
+                    let currentHandStandard = standardizeHandString(currentHandMatch);
+                    let spaceHandStandard = standardizeHandString(spaceHand);
+                    canClaim = (currentHandStandard === spaceHandStandard);
+                }
             }
 
-            const spaceHand = boardState[r][c].hand;
-            let matched = (spaceHand === HAND_KEYS.FREE || spaceHand === currentHandMatch);
-            
-            if (matched) {
-                gameStats.successfulClaims++;
-                gameStats.claimsByPlayer[currentPlayer]++;
+            if (canClaim) {
+                // Steal/Claim Logic
                 
-                boardState[r][c].owner = currentPlayer;
+                // 1. Update the owner/claimedBy list
+                if (isFreeSpace) {
+                    // Update state to reflect this player's presence in the stack
+                    if (!cell.claimedBy.includes(currentPlayer)) {
+                        cell.claimedBy.push(currentPlayer);
+                    }
+                    // The 'owner' field only tracks the most recent claim for rendering purposes
+                    cell.owner = currentPlayer; 
+                } else {
+                    // Normal claim logic
+                    cell.owner = currentPlayer; 
+                    gameStats.successfulClaims++;
+                    gameStats.claimsByPlayer[currentPlayer]++;
+                }
                 
+                // 2. Check for sequences (The FREE space acts as a wildcard for everyone here)
                 const sequencesFound = findSequences(currentPlayer);
                 const newSequenceCount = sequencesFound.length;
                 
                 if (newSequenceCount > playerSequences[currentPlayer]) {
-                    boardState.forEach(row => row.forEach(cell => {
-                        if (cell.owner === currentPlayer) cell.inSequence = false;
+                    // Update sequences and check for win
+                    boardState.forEach(row => row.forEach(c => {
+                        if (c.owner === currentPlayer) c.inSequence = false;
                     }));
                     
                     sequencesFound.forEach(seq => {
@@ -770,7 +876,19 @@
                 
                 endTurn();
             } else {
-                showMessage("Invalid Claim", `Your current hand (${currentHandMatch || 'None'}) does not match the space: ${spaceHand}.`);
+                // Error messages based on why claim failed
+                let errorTitle = "Invalid Claim";
+                let errorText = "The space is already claimed, or your hand does not match this empty space.";
+                
+                if (cell.owner !== 0 && !isFreeSpace) {
+                    errorText = "That space is claimed by an opponent! You must choose an empty space.";
+                } else if (currentHandMatch === HAND_KEYS.BUST && !isFreeSpace) {
+                    errorText = "A BUST hand cannot claim a regular space.";
+                } else if (cell.owner === 0 && currentHandMatch !== HAND_KEYS.BUST) {
+                    errorText = `Your hand (${currentHandMatch}) does not match the space.`;
+                }
+
+                showMessage(errorTitle, errorText);
             }
         }
         
@@ -789,19 +907,48 @@
                     cellEl.dataset.col = c;
                     cellEl.innerHTML = renderBoardHand(cell.hand);
 
+                    // Add click handler to all cells. Logic inside handleClaim will reject invalid clicks.
+                    cellEl.onclick = () => handleClaim(r, c);
+
+
+                    // --- RENDER CHIPS ---
                     if (cell.owner > 0) {
                         cellEl.classList.add('claimed');
-                        const chipLabel = playerNames[cell.owner].charAt(0); 
-                        cellEl.innerHTML = `<div class="player-chip player-${cell.owner}">${chipLabel}</div>`;
-                        cellEl.onclick = null;
+                        
+                        if (cell.hand === HAND_KEYS.FREE) {
+                            // FREE SPACE: Iterate through all players who have claimed it and display their corner marker
+                            
+                            // Define corner map for positions (p1, p2, p3 classes)
+                            const playerPositionMap = { 
+                                1: 'p1', // Blue: Top-Left
+                                2: 'p2', // Red: Top-Right
+                                3: 'p3'  // Green: Bottom-Left
+                            };
+
+                            // Iterate over every player who has claimed this space
+                            cell.claimedBy.forEach(playerId => {
+                                const chipLabel = playerNames[playerId].charAt(0);
+                                const positionClass = playerPositionMap[playerId];
+                                
+                                cellEl.innerHTML += `<div class="player-chip corner-chip player-${playerId} ${positionClass}">${chipLabel}</div>`;
+                            });
+                            // Keep the original hand content visible underneath
+                        } else {
+                           // Normal claimed space is a large center chip
+                           const chipLabel = playerNames[cell.owner].charAt(0); 
+                           cellEl.innerHTML = `<div class="player-chip player-${cell.owner}">${chipLabel}</div>`;
+                           // Normal claimed spaces are locked
+                           cellEl.onclick = null;
+                        }
+
                         if (cell.inSequence) {
                             cellEl.classList.add('in-sequence'); 
                         } else {
                             cellEl.classList.remove('in-sequence');
                         }
                     } else {
-                        cellEl.onclick = () => handleClaim(r, c);
-                        cellEl.classList.remove('claimable', 'in-sequence'); 
+                        // Unclaimed space click handler is already set above
+                        cellEl.classList.remove('claimed', 'in-sequence'); 
                     }
                     boardEl.appendChild(cellEl);
                 }
@@ -810,20 +957,36 @@
         
         function highlightClaimableSpaces() {
             document.querySelectorAll('.claimable').forEach(el => el.classList.remove('claimable'));
-            if (!currentHandMatch || currentHandMatch === HAND_KEYS.BUST) return;
+            
+            if (rollsLeft === 3) return; // Cannot claim before first roll
+
+            const currentHandStandard = standardizeHandString(currentHandMatch);
 
             for (let r = 0; r < 9; r++) {
                 for (let c = 0; c < 9; c++) {
                     const cell = boardState[r][c];
-                    if (cell.owner === 0) { 
-                        const spaceHand = cell.hand;
-                        let matched = (spaceHand === HAND_KEYS.FREE || spaceHand === currentHandMatch);
-                        
-                        if (matched) {
-                            const cellEl = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
-                            if (cellEl) {
-                                cellEl.classList.add('claimable');
-                            }
+                    const spaceHand = cell.hand;
+                    
+                    let isHighlightable = false;
+                    
+                    // 1. FREE space is always highlightable (since any non-BUST roll can claim/re-claim it)
+                    if (spaceHand === HAND_KEYS.FREE) {
+                        if (currentHandMatch !== HAND_KEYS.BUST) {
+                            isHighlightable = true;
+                        }
+                    } 
+                    // 2. Unclaimed spot that matches (non-BUST roll required)
+                    else if (cell.owner === 0 && currentHandMatch !== HAND_KEYS.BUST) {
+                        const spaceHandStandard = standardizeHandString(spaceHand);
+                        if (currentHandStandard === spaceHandStandard) {
+                            isHighlightable = true;
+                        }
+                    }
+                    
+                    if (isHighlightable) {
+                        const cellEl = document.querySelector(`[data-row="${r}"][data-col="${c}"]`);
+                        if (cellEl) {
+                            cellEl.classList.add('claimable');
                         }
                     }
                 }
@@ -1051,8 +1214,14 @@
                     boardState[r] = [];
                     for (let c = 0; c < 9; c++) {
                         boardState[r][c] = {
-                            owner: 0, hand: BOARD_DATA[r][c].trim(), inSequence: false
+                            owner: 0, 
+                            hand: BOARD_DATA[r][c].trim(), 
+                            inSequence: false
                         };
+                        // Initialize 'claimedBy' array only for the FREE space
+                        if (boardState[r][c].hand === HAND_KEYS.FREE) {
+                            boardState[r][c].claimedBy = [];
+                        }
                     }
                 }
                 currentPlayer = 1;
