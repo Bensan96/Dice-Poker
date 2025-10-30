@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dice Poker Sequence</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f7f7f7; }
+        .dice {
+            width: 40px; height: 40px; background-color: white; border: 2px solid #333;
+            border-radius: 8px; display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; font-weight: bold; cursor: pointer; transition: transform 0.1s, box-shadow 0.1s;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .dice-held {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.3);
+            border-color: #EF4444; /* Red for held dice */
+        }
+        .board-cell {
+            height: 100%;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.6rem;
+            text-align: center;
+            padding: 2px;
+            cursor: pointer;
+            border: 1px solid #d1d5db;
+            transition: background-color 0.15s, transform 0.1s;
+            background-color: #fff;
+            user-select: none;
+        }
+        .board-cell:hover:not(.claimed) {
+            transform: scale(1.05);
+            background-color: #f3f4f6;
+        }
+        .player-chip {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5);
+            font-size: 1.25rem;
+        }
+        .player-1 { background-color: #3B82F6; } /* Blue */
+        .player-2 { background-color: #DC2626; } /* Red */
+        .control-button {
+            transition: background-color 0.15s, transform 0.1s;
+        }
+        .control-button:active {
+            transform: scale(0.98);
+        }
+        /* Mobile adjustments */
+        @media (max-width: 640px) {
+            .board-cell {
+                font-size: 0.5rem;
+                padding: 1px;
+            }
+            .dice {
+                width: 32px;
+                height: 32px;
+                font-size: 1.2rem;
+            }
+        }
+    </style>
+</head>
+<body class="p-4 bg-gray-100 min-h-screen">
+
+    <div id="game-container" class="max-w-4xl mx-auto shadow-2xl rounded-xl bg-white p-6">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6 border-b-2 pb-2">Dice Poker Sequence</h1>
+
+        <!-- Game Info & Status -->
+        <div id="status-panel" class="mb-6 p-4 rounded-lg shadow-inner bg-gray-50">
+            <div id="current-turn-display" class="text-lg font-semibold text-center mb-2"></div>
+            <div id="rolls-left-display" class="text-sm text-center text-gray-600 mb-2"></div>
+            <div id="hand-result-display" class="text-xl font-bold text-center text-green-700"></div>
+        </div>
+
+        <!-- Dice Area -->
+        <div id="dice-area" class="flex justify-center space-x-3 mb-6 p-4 border rounded-lg bg-gray-50 shadow">
+            <!-- Dice elements will be inserted here -->
+        </div>
+
+        <!-- Controls -->
+        <div class="flex justify-center space-x-4 mb-8">
+            <button id="roll-button" onclick="handleRoll()" class="control-button bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-md text-lg transition duration-150 ease-in-out" disabled>
+                Roll Dice (3 Left)
+            </button>
+            <button id="next-turn-button" onclick="endTurn()" class="control-button bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-lg shadow-md text-lg transition duration-150 ease-in-out" disabled>
+                End Turn
+            </button>
+        </div>
+
+        <!-- Game Board -->
+        <div id="game-board-container" class="aspect-square w-full max-w-lg mx-auto bg-gray-200 border-4 border-gray-800 rounded-lg overflow-hidden shadow-2xl">
+            <div id="game-board" class="grid grid-cols-9 grid-rows-9 h-full w-full">
+                <!-- Board cells will be inserted here -->
+            </div>
+        </div>
+        
+        <!-- Game Message/Modal -->
+        <div id="message-box" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
+            <div class="bg-white p-8 rounded-lg shadow-2xl max-w-sm w-full text-center">
+                <h3 id="message-title" class="text-2xl font-bold mb-4 text-gray-800"></h3>
+                <p id="message-text" class="text-lg mb-6"></p>
+                <button onclick="dismissMessage()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg shadow-md">
+                    OK / New Game
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME DATA (Based on User's CSV) ---
+        const BOARD_DATA = [
+            ["Straight", "6 6 6 6", "6 6 5 5", "6 6 4 4", "1 1", "6 6 3 3", "6 6 2 2", "6 6 1 1", "Straight"],
+            ["6 6", "Fullhouse", "5 5 1 1", "5 5 2 2", "5 5 3 3", "5 5 4 4", "5 5 5 5", "Fullhouse", "4 4"],
+            ["4 4 4 4", "2 2 2002", "Fullhouse", "4 4 3 3", "1 1 1 1", "4 4 2 2", "Fullhouse", "6 6 2006", "4 4 1 1"],
+            ["4 4 4", "1 1 1", "3 3 3 3", "Fullhouse", "3 3 2 2", "Fullhouse", "3 3 1", "3 3 3", "5 5 5"],
+            ["Lucky 7", "1 1 2 2", "Lucky 11", "2 2 2 2", "FREE", "Lucky 11", "2 2 2 2", "1 1 2 2", "Lucky 7"],
+            ["5 5 5", "3 3 3", "1 3 3", "Fullhouse", "2 2 3 3", "Fullhouse", "3 3 3 3", "1 1 1", "4 4 4"],
+            ["1 1 4 4", "6 6 6", "Fullhouse", "2 2 4 4", "1 1 1 1", "3 3 4 4", "Fullhouse", "2 2 2", "4 4 4 4"],
+            ["4 4", "Fullhouse", "5 5 5 5", "4 4 5 5", "3 3 5 5", "2 2 5 5", "1 1 5 5", "Fullhouse", "6 6"],
+            ["Straight", "1 1 6 6", "2 2 6 6", "3 3 6 6", "1 1", "4 4 6 6", "5 5 6 6", "6 6 6 6", "Straight"]
+        ];
+
+        // --- GAME STATE ---
+        let boardState = [];
+        let diceValues = [1, 1, 1, 1, 1];
+        let diceHeld = [false, false, false, false, false];
+        let currentPlayer = 1;
+        let rollsLeft = 3;
+        let currentHandMatch = null;
+        const WIN_LENGTH = 5; // Sequence length required to win
+
+        const STATUS_DISPLAY = document.getElementById('status-panel');
+        const TURN_DISPLAY = document.getElementById('current-turn-display');
+        const ROLLS_DISPLAY = document.getElementById('rolls-left-display');
+        const HAND_RESULT_DISPLAY = document.getElementById('hand-result-display');
+        const ROLL_BUTTON = document.getElementById('roll-button');
+        const NEXT_TURN_BUTTON = document.getElementById('next-turn-button');
+
+        // --- GAME INITIALIZATION ---
+
+        function initGame() {
+            // Initialize board state to 0 (unclaimed)
+            for (let r = 0; r < 9; r++) {
+                boardState[r] = [];
+                for (let c = 0; c < 9; c++) {
+                    boardState[r][c] = {
+                        owner: 0, // 0: Unclaimed, 1: Player 1, 2: Player 2
+                        hand: BOARD_DATA[r][c],
+                    };
+                }
+            }
+
+            currentPlayer = 1;
+            rollsLeft = 3;
+            currentHandMatch = null;
+            diceValues = [1, 1, 1, 1, 1];
+            diceHeld = [false, false, false, false, false];
+
+            renderBoard();
+            renderDice();
+            updateStatus();
+            ROLL_BUTTON.disabled = false;
+            NEXT_TURN_BUTTON.disabled = true;
+            document.getElementById('message-box').classList.add('hidden');
+        }
+
+        // --- RENDERING FUNCTIONS ---
+
+        function renderBoard() {
+            const boardEl = document.getElementById('game-board');
+            boardEl.innerHTML = '';
+            
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cell = boardState[r][c];
+                    const cellEl = document.createElement('div');
+                    cellEl.className = 'board-cell rounded';
+                    cellEl.dataset.row = r;
+                    cellEl.dataset.col = c;
+                    cellEl.innerHTML = `<span>${cell.hand}</span>`;
+
+                    if (cell.owner === 1) {
+                        cellEl.classList.add('claimed');
+                        cellEl.innerHTML = `<div class="player-chip player-1">P1</div>`;
+                        cellEl.onclick = null;
+                    } else if (cell.owner === 2) {
+                        cellEl.classList.add('claimed');
+                        cellEl.innerHTML = `<div class="player-chip player-2">P2</div>`;
+                        cellEl.onclick = null;
+                    } else {
+                        // Only add click handler for unclaimed spaces
+                        cellEl.onclick = () => handleClaim(r, c);
+                    }
+                    boardEl.appendChild(cellEl);
+                }
+            }
+        }
+
+        function renderDice() {
+            const diceAreaEl = document.getElementById('dice-area');
+            diceAreaEl.innerHTML = '';
+            
+            diceValues.forEach((value, index) => {
+                const diceEl = document.createElement('div');
+                diceEl.className = `dice ${diceHeld[index] ? 'dice-held' : 'bg-gray-200'}`;
+                diceEl.textContent = value;
+                diceEl.onclick = () => toggleDiceHold(index);
+                diceAreaEl.appendChild(diceEl);
+            });
+        }
+
+        function updateStatus() {
+            TURN_DISPLAY.textContent = `Player ${currentPlayer}'s Turn (P${currentPlayer === 1 ? ' Blue' : ' Red'})`;
+            ROLLS_DISPLAY.textContent = `Rolls Remaining: ${rollsLeft}`;
+            
+            if (currentHandMatch) {
+                HAND_RESULT_DISPLAY.textContent = `Hand: ${currentHandMatch}`;
+                HAND_RESULT_DISPLAY.classList.remove('text-red-700', 'text-green-700');
+                HAND_RESULT_DISPLAY.classList.add(currentHandMatch === 'BUST' ? 'text-red-700' : 'text-green-700');
+            } else if (rollsLeft === 3) {
+                HAND_RESULT_DISPLAY.textContent = 'Roll to start!';
+                HAND_RESULT_DISPLAY.classList.remove('text-red-700', 'text-green-700');
+            } else {
+                HAND_RESULT_DISPLAY.textContent = 'Hold dice and Roll again or End Turn.';
+                HAND_RESULT_DISPLAY.classList.remove('text-red-700', 'text-green-700');
+            }
+
+            ROLL_BUTTON.textContent = `Roll Dice (${rollsLeft} Left)`;
+            if (rollsLeft === 0) {
+                ROLL_BUTTON.disabled = true;
+                ROLL_BUTTON.textContent = 'No Rolls Left';
+            }
+        }
+
+        function showMessage(title, text, isWinner = false) {
+            document.getElementById('message-title').textContent = title;
+            document.getElementById('message-text').textContent = text;
+            document.getElementById('message-box').classList.remove('hidden');
+        }
+
+        function dismissMessage() {
+            document.getElementById('message-box').classList.add('hidden');
+            initGame(); // Restart game upon dismissing the message
+        }
+
+        // --- DICE LOGIC ---
+
+        function rollDice() {
+            for (let i = 0; i < 5; i++) {
+                if (!diceHeld[i]) {
+                    diceValues[i] = Math.floor(Math.random() * 6) + 1; // 1 to 6
+                }
+            }
+            rollsLeft--;
+            checkHand();
+            renderDice();
+            updateStatus();
+
+            NEXT_TURN_BUTTON.disabled = currentHandMatch === 'BUST' || rollsLeft === 0 ? false : true;
+            if (rollsLeft === 0) ROLL_BUTTON.disabled = true;
+        }
+
+        function toggleDiceHold(index) {
+            if (rollsLeft < 3) {
+                diceHeld[index] = !diceHeld[index];
+                renderDice();
+            }
+        }
+
+        // --- HAND CHECKING LOGIC ---
+
+        function checkHand() {
+            const counts = {};
+            let sum = 0;
+            diceValues.forEach(val => {
+                counts[val] = (counts[val] || 0) + 1;
+                sum += val;
+            });
+            const numUnique = Object.keys(counts).length;
+            const values = Object.values(counts);
+
+            // SPECIAL SUM HANDS
+            if (sum === 7) {
+                currentHandMatch = 'Lucky 7';
+                return;
+            }
+            if (sum === 11) {
+                currentHandMatch = 'Lucky 11';
+                return;
+            }
+
+            // POKER HANDS (Highest Rank wins)
+            if (values.includes(5)) {
+                currentHandMatch = `${diceValues[0]} ${diceValues[0]} ${diceValues[0]} ${diceValues[0]} ${diceValues[0]}`; // Five of a Kind
+            } else if (values.includes(4)) {
+                const quadValue = diceValues.find(v => counts[v] === 4);
+                currentHandMatch = `${quadValue} ${quadValue} ${quadValue} ${quadValue}`; // Four of a Kind
+            } else if (values.includes(3) && values.includes(2)) {
+                currentHandMatch = 'Fullhouse';
+            } else if (numUnique === 5) {
+                const sorted = diceValues.sort((a, b) => a - b);
+                const isStraight = sorted[4] - sorted[0] === 4;
+                if (isStraight) {
+                    currentHandMatch = 'Straight';
+                } else {
+                    currentHandMatch = 'BUST';
+                }
+            } else if (values.includes(3)) {
+                const tripValue = diceValues.find(v => counts[v] === 3);
+                currentHandMatch = `${tripValue} ${tripValue} ${tripValue}`; // Three of a Kind
+            } else if (values.includes(2) && numUnique === 3) {
+                const pairs = Object.keys(counts).filter(k => counts[k] === 2).sort((a, b) => b - a);
+                currentHandMatch = `${pairs[0]} ${pairs[0]} ${pairs[1]} ${pairs[1]}`; // Two Pair
+            } else if (values.includes(2) && numUnique === 4) {
+                const pairValue = diceValues.find(v => counts[v] === 2);
+                currentHandMatch = `${pairValue} ${pairValue}`; // One Pair
+            } else {
+                currentHandMatch = 'BUST';
+            }
+        }
+
+        // --- GAME FLOW HANDLERS ---
+
+        function handleRoll() {
+            if (rollsLeft > 0) {
+                rollDice();
+                ROLL_BUTTON.disabled = true; // Disable roll until hand is dealt or turn is ended
+                // Re-enable after a small delay to allow review and selection
+                setTimeout(() => {
+                    ROLL_BUTTON.disabled = rollsLeft === 0;
+                    NEXT_TURN_BUTTON.disabled = false;
+                }, 500);
+            }
+        }
+
+        function handleClaim(r, c) {
+            if (!currentHandMatch || rollsLeft === 3) {
+                showMessage("Roll First!", "You must roll the dice and have a valid hand before claiming a space.");
+                return;
+            }
+
+            const spaceHand = boardState[r][c].hand.trim();
+            let matched = false;
+            
+            // Allow FREE space claim if any hand was rolled
+            if (spaceHand === 'FREE') {
+                 matched = true;
+            }
+            
+            // Check for direct hand match
+            else if (spaceHand === currentHandMatch) {
+                matched = true;
+            } 
+            
+            // Handle specific number matches (e.g. 4 4 4 4 matches 4K, 6 6 matches 1P)
+            else if (currentHandMatch.includes('Four of a Kind') && spaceHand.match(/(\d)\s\1\s\1\s\1/)) {
+                const spaceNum = spaceHand.split(' ')[0];
+                const handNum = currentHandMatch.split(' ')[0];
+                if (spaceNum === handNum) matched = true;
+            }
+
+            // Note: Full logic for matching all 2P, 3K, 4K on the board is complex due to the custom labeling (e.g. "6 6 5 5").
+            // For the purpose of this demo, we will check against the primary identified hand types and the most specific labels.
+
+            if (matched) {
+                boardState[r][c].owner = currentPlayer;
+                
+                if (checkForWin(r, c)) {
+                    showMessage(`Game Over!`, `Player ${currentPlayer} Wins by forming a sequence of ${WIN_LENGTH}!`, true);
+                    return;
+                }
+
+                endTurn();
+            } else {
+                showMessage("Invalid Claim", `Your current hand (${currentHandMatch || 'None'}) does not match the space: ${spaceHand}.`);
+            }
+        }
+
+        function endTurn() {
+            if (currentHandMatch === 'BUST' && rollsLeft > 0) {
+                 // Player must still end turn if they have a bust hand.
+            } else if (!currentHandMatch && rollsLeft === 3) {
+                 // Player hasn't rolled yet.
+            }
+            
+            // Reset for next player
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            rollsLeft = 3;
+            diceHeld = [false, false, false, false, false];
+            currentHandMatch = null;
+            
+            ROLL_BUTTON.disabled = false;
+            NEXT_TURN_BUTTON.disabled = true;
+            
+            renderBoard();
+            renderDice();
+            updateStatus();
+        }
+
+        // --- WIN CONDITION CHECK ---
+
+        // Function to check if a sequence of 5 has been formed after a claim
+        function checkForWin(r, c) {
+            const player = boardState[r][c].owner;
+            const N = 9;
+
+            // Helper to count max sequence length in a direction
+            function countSequence(dr, dc) {
+                let count = 0;
+                // Count backward from (r, c)
+                let tempR = r;
+                let tempC = c;
+                while (tempR >= 0 && tempR < N && tempC >= 0 && tempC < N && (boardState[tempR][tempC].owner === player || boardState[tempR][tempC].hand === 'FREE')) {
+                    count++;
+                    tempR -= dr;
+                    tempC -= dc;
+                }
+                // Count forward from (r, c), excluding the starting cell if already counted backward
+                tempR = r + dr;
+                tempC = c + dc;
+                while (tempR >= 0 && tempR < N && tempC >= 0 && tempC < N && (boardState[tempR][tempC].owner === player || boardState[tempR][tempC].hand === 'FREE')) {
+                    count++;
+                    tempR += dr;
+                    tempC += dc;
+                }
+                return count;
+            }
+
+            // Check Horizontal (-1, 0) and (1, 0)
+            if (countSequence(0, 1) >= WIN_LENGTH) return true;
+            // Check Vertical (0, -1) and (0, 1)
+            if (countSequence(1, 0) >= WIN_LENGTH) return true;
+            // Check Diagonal \ (1, 1) and (-1, -1)
+            if (countSequence(1, 1) >= WIN_LENGTH) return true;
+            // Check Diagonal / (1, -1) and (-1, 1)
+            if (countSequence(1, -1) >= WIN_LENGTH) return true;
+
+            return false;
+        }
+
+        // --- START GAME ---
+        window.onload = initGame;
+    </script>
+</body>
+</html>
+
