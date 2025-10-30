@@ -6,7 +6,7 @@
     <title>Dice Poker Sequence</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         
         /* --- DARK THEME STYLES --- */
         
@@ -20,6 +20,11 @@
             --dark-container: #1F2937;
             --medium-dark: #374151;
             --light-text: #D1D5DB;
+            
+            /* Custom Player Colors for Chips/Status text */
+            --player-1-color: #3B82F6; /* Blue */
+            --player-2-color: #DC2626; /* Red */
+            --player-3-color: #10B981; /* Green */
         }
 
         body { 
@@ -144,19 +149,46 @@
             transform: scale(0.98) translateY(2px);
             box-shadow: 0 2px #101620;
         }
-        #roll-button {
-            background-color: var(--primary-blue); 
-        }
-        #roll-button:hover {
-            background-color: #2563EB; 
-        }
+        
+        /* Roll Button styles are managed entirely by JS using Tailwind utility classes */
+        
         #next-turn-button {
-            background-color: var(--highlight-green); 
+            background-color: var(--medium-dark); 
         }
         #next-turn-button:hover {
-            background-color: #059669; 
+            background-color: #4B5563; 
+        }
+        #restart-button {
+             background-color: #DC2626; /* Red */
+             color: white;
+        }
+        #restart-button:hover {
+             background-color: #B91C1C;
+        }
+        #stats-button {
+             background-color: #FBBF24; /* Yellow */
+             color: #1F2937; /* Dark text */
+        }
+        #stats-button:hover {
+             background-color: #F59E0B;
         }
         
+        /* Modal Content Styling (Applied to all modal content) */
+        .modal-content {
+             background-color: var(--dark-container); 
+             color: var(--light-text);
+             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+             border-radius: 0.75rem;
+             padding: 2rem;
+             width: 100%;
+             max-width: 400px; /* Default max width */
+        }
+        
+        /* Specific max-width for the Stats Modal */
+        #stats-modal .modal-content {
+            max-width: 600px;
+        }
+
         /* Mobile adjustments */
         @media (max-width: 640px) {
             .board-cell {
@@ -198,32 +230,59 @@
         
         <!-- Controls (MOVED TO THE BOTTOM) -->
         <div class="flex justify-center space-x-4 mt-8 mb-4">
-            <!-- REMOVED onclick="handleRoll()" -->
-            <button id="roll-button" class="control-button bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg shadow-md text-lg transition duration-150 ease-in-out" disabled>
+            <!-- Note: The class will be managed by JS for dynamic color -->
+            <button id="roll-button" class="control-button text-white font-bold py-3 px-8 rounded-lg shadow-md text-lg transition duration-150 ease-in-out" disabled>
                 Roll Dice (3 Left)
             </button>
-            <!-- REMOVED onclick="endTurn()" -->
-            <button id="next-turn-button" class="control-button bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-lg shadow-md text-lg transition duration-150 ease-in-out" disabled>
+            <button id="next-turn-button" class="control-button bg-medium-dark text-white font-bold py-3 px-8 rounded-lg shadow-md text-lg transition duration-150 ease-in-out" disabled>
                 End Turn
             </button>
         </div>
         
-        <!-- Game Message/Modal -->
+        <!-- New Controls for Stats and Restart -->
+        <div class="flex justify-center space-x-4 mt-4 mb-4">
+             <button id="stats-button" class="control-button bg-yellow-500 hover:bg-yellow-600 text-gray-800 font-bold py-2 px-6 rounded-lg shadow-md text-base transition duration-150 ease-in-out">
+                View Stats
+            </button>
+            <button id="restart-button" class="control-button bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg shadow-md text-base transition duration-150 ease-in-out">
+                Restart Game
+            </button>
+        </div>
+        
+        <!-- Game Message/Modal (Used for General Messages and Confirmation Prompts) -->
         <div id="message-box" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
-            <!-- REMOVED onclick="dismissMessage()" -->
-            <div class="bg-white p-8 rounded-lg shadow-2xl max-w-sm w-full text-center">
-                <h3 id="message-title" class="text-2xl font-bold mb-4 text-gray-800"></h3>
+            <!-- Modal Content Wrapper for Centering -->
+            <div class="modal-content text-center">
+                <h3 id="message-title" class="text-2xl font-bold mb-4 text-gray-100"></h3>
                 <p id="message-text" class="text-lg mb-6"></p>
+                <!-- Button text changes based on context (winner, error, or restart confirmation) -->
                 <button id="dismiss-button" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg shadow-md">
                     OK / New Game
+                </button>
+                <button id="cancel-button" class="hidden bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-md ml-4">
+                    Cancel
                 </button>
             </div>
         </div>
         
+        <!-- Statistics Modal -->
+        <div id="stats-modal" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center p-4 z-50">
+            <!-- Modal Content Wrapper for Centering -->
+            <div class="modal-content !max-w-lg">
+                <h3 class="text-3xl font-bold mb-4 text-gray-100">Game Statistics</h3>
+                <div id="stats-content" class="text-left space-y-3 p-4 bg-gray-800 rounded-lg">
+                    <!-- Stats loaded here -->
+                </div>
+                <button onclick="document.getElementById('stats-modal').classList.add('hidden')" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg shadow-md mt-6">
+                    Close
+                </button>
+            </div>
+        </div>
+
         <!-- Player Setup Modal (Hidden by default) -->
         <div id="setup-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50">
-            <div class="bg-white p-8 rounded-lg shadow-2xl max-w-sm w-full text-center">
-                <h3 class="text-2xl font-bold mb-6 text-gray-800">Select Number of Players</h3>
+            <div class="modal-content text-center">
+                <h3 class="text-2xl font-bold mb-6 text-gray-100">Select Number of Players</h3>
                 <div class="flex justify-center space-x-4">
                     <button id="start-2p" onclick="startGame(2)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-lg">
                         2 Players
@@ -237,24 +296,15 @@
     </div>
 
     <script>
-        // --- GAME DATA (Based on User's CSV with requested fixes) ---
-        const BOARD_DATA = [
-            ["Straight", "6 6 6 6", "6 6 5 5", "6 6 4 4", "1 1", "6 6 3 3", "6 6 2 2", "6 6 1 1", "Straight"],
-            ["6 6", "Fullhouse", "5 5 1 1", "5 5 2 2", "5 5 3 3", "5 5 4 4", "5 5 5 5", "Fullhouse", "4 4"],
-            ["4 4 4 4", "2 2 2", "Fullhouse", "4 4 3 3", "1 1 1 1", "4 4 2 2", "Fullhouse", "6 6 6", "4 4 1 1"],
-            ["4 4 4", "1 1 1", "3 3 3 3", "Fullhouse", "3 3 2 2", "Fullhouse", "3 3 1", "3 3 3", "5 5 5"],
-            ["Lucky 7", "1 1 2 2", "Lucky 11", "2 2 2 2", "FREE", "Lucky 11", "2 2 2 2", "1 1 2 2", "Lucky 7"],
-            ["5 5 5", "3 3 3", "1 3 3", "Fullhouse", "2 2 3 3", "Fullhouse", "3 3 3 3", "1 1 1", "4 4 4"],
-            ["1 1 4 4", "6 6 6", "Fullhouse", "2 2 4 4", "1 1 1 1", "3 3 4 4", "Fullhouse", "2 2 2", "4 4 4 4"],
-            ["4 4", "Fullhouse", "5 5 5 5", "4 4 5 5", "3 3 5 5", "2 2 5 5", "1 1 5 5", "Fullhouse", "6 6"],
-            ["Straight", "1 1 6 6", "2 2 6 6", "3 3 6 6", "2 2", "4 4 6 6", "5 5 6 6", "6 6 6 6", "Straight"] // I5 is "2 2"
-        ];
-        
         // --- CORE GAME LOGIC FUNCTIONS (Declared at top for hoisting safety) ---
         
         // Renamed from rollDice() to handleRoll() to match event listener
         function handleRoll() {
             if (rollsLeft > 0) {
+                // Increment stats
+                gameStats.totalRolls++;
+                gameStats.rollsByPlayer[currentPlayer]++;
+
                 for (let i = 0; i < 5; i++) {
                     if (!diceHeld[i]) {
                         diceValues[i] = Math.floor(Math.random() * 6) + 1; // 1 to 6
@@ -290,13 +340,22 @@
             updateStatus();
         }
 
+        let pendingRestart = false; // State to track if the modal is a restart prompt
+
         function dismissMessage() {
             document.getElementById('message-box').classList.add('hidden');
             
-            if (gameWon) {
-                // If game was won, go back to player selection screen
+            if (gameWon || pendingRestart) {
+                // If game was won or player confirmed restart, go back to player selection screen
+                pendingRestart = false;
+                // Hide cancel button
+                document.getElementById('cancel-button').classList.add('hidden');
                 initGame(); 
             }
+        }
+        
+        function promptRestartConfirmation() {
+            showMessage("Confirm Restart", "Are you sure you want to quit the current game and start over? All progress will be lost.", false, true);
         }
 
         // --- UTILITY: DICE RENDERING ---
@@ -332,6 +391,18 @@
         }
 
         // --- GLOBAL STATE PLACEHOLDERS ---
+        const BOARD_DATA = [
+            ["Straight", "6 6 6 6", "6 6 5 5", "6 6 4 4", "1 1", "6 6 3 3", "6 6 2 2", "6 6 1 1", "Straight"],
+            ["6 6", "Fullhouse", "5 5 1 1", "5 5 2 2", "5 5 3 3", "5 5 4 4", "5 5 5 5", "Fullhouse", "4 4"],
+            ["4 4 4 4", "2 2 2", "Fullhouse", "4 4 3 3", "1 1 1 1", "4 4 2 2", "Fullhouse", "6 6 6", "4 4 1 1"],
+            ["4 4 4", "1 1 1", "3 3 3 3", "Fullhouse", "3 3 2 2", "Fullhouse", "3 3 1", "3 3 3", "5 5 5"],
+            ["Lucky 7", "1 1 2 2", "Lucky 11", "2 2 2 2", "FREE", "Lucky 11", "2 2 2 2", "1 1 2 2", "Lucky 7"],
+            ["5 5 5", "3 3 3", "1 3 3", "Fullhouse", "2 2 3 3", "Fullhouse", "3 3 3 3", "1 1 1", "4 4 4"],
+            ["1 1 4 4", "6 6 6", "Fullhouse", "2 2 4 4", "1 1 1 1", "3 3 4 4", "Fullhouse", "2 2 2", "4 4 4 4"],
+            ["4 4", "Fullhouse", "5 5 5 5", "4 4 5 5", "3 3 5 5", "2 2 5 5", "1 1 5 5", "Fullhouse", "6 6"],
+            ["Straight", "1 1 6 6", "2 2 6 6", "3 3 6 6", "2 2", "4 4 6 6", "5 5 6 6", "6 6 6 6", "Straight"] 
+        ];
+
         let boardState = [];
         let diceValues = [1, 1, 1, 1, 1];
         let diceHeld = [false, false, false, false, false];
@@ -342,6 +413,7 @@
         
         // NEW STATE FOR PLAYER COUNT
         let numPlayers = 3; 
+        let gameStats = {}; // Initialized in runGameSetup
 
         // Player 1/2/3 Win Counts
         let playerSequences = { 1: 0, 2: 0, 3: 0 };
@@ -351,7 +423,7 @@
         let playerNames = { 1: 'Blue', 2: 'Red', 3: 'Green' }; 
         
         // DOM element variables that will be initialized in runGameSetup
-        let STATUS_DISPLAY, TURN_DISPLAY, ROLLS_DISPLAY, HAND_RESULT_DISPLAY, ROLL_BUTTON, NEXT_TURN_BUTTON, WIN_COUNT_DISPLAY, WIN_GOAL_TEXT, DISMISS_BUTTON;
+        let STATUS_DISPLAY, TURN_DISPLAY, ROLLS_DISPLAY, HAND_RESULT_DISPLAY, ROLL_BUTTON, NEXT_TURN_BUTTON, WIN_COUNT_DISPLAY, WIN_GOAL_TEXT, DISMISS_BUTTON, STATS_MODAL, MESSAGE_BOX;
 
         // Standardized Hand Keys for Logic
         const HAND_KEYS = {
@@ -389,15 +461,29 @@
             WIN_COUNT_DISPLAY = document.getElementById('win-count-display');
             WIN_GOAL_TEXT = document.getElementById('win-goal-text');
             DISMISS_BUTTON = document.getElementById('dismiss-button');
+            STATS_MODAL = document.getElementById('stats-modal');
+            MESSAGE_BOX = document.getElementById('message-box');
+            const CANCEL_BUTTON = document.getElementById('cancel-button'); // Local const for use here
 
             // --- EVENT LISTENERS (FIX for ReferenceError) ---
             ROLL_BUTTON.removeEventListener('click', handleRoll);
             NEXT_TURN_BUTTON.removeEventListener('click', endTurn);
             DISMISS_BUTTON.removeEventListener('click', dismissMessage);
+            CANCEL_BUTTON.removeEventListener('click', dismissMessage); // Clear old listeners if any
             
             ROLL_BUTTON.addEventListener('click', handleRoll);
             NEXT_TURN_BUTTON.addEventListener('click', endTurn);
             DISMISS_BUTTON.addEventListener('click', dismissMessage);
+            CANCEL_BUTTON.addEventListener('click', dismissMessage);
+
+            // NEW LISTENERS for stats and restart
+            document.getElementById('restart-button').addEventListener('click', promptRestartConfirmation);
+            document.getElementById('stats-button').addEventListener('click', showStats);
+            
+            // Listener for clicking outside the stats modal (only runs if STATS_MODAL is visible)
+            STATS_MODAL.addEventListener('click', closeModalsOnClickOutside);
+            // Listener for clicking outside the message modal
+            MESSAGE_BOX.addEventListener('click', closeModalsOnClickOutside);
 
 
              // Initialize board state to 0 (unclaimed)
@@ -419,10 +505,14 @@
             diceHeld = [false, false, false, false, false];
             gameWon = false; 
             
-            // Clear and reset sequence counters based on numPlayers
+            // Clear and reset sequence counters and stats based on numPlayers
             playerSequences = {};
+            gameStats = { totalRolls: 0, successfulClaims: 0, rollsByPlayer: {}, claimsByPlayer: {} };
+
             for (let i = 1; i <= numPlayers; i++) {
                 playerSequences[i] = 0;
+                gameStats.rollsByPlayer[i] = 0;
+                gameStats.claimsByPlayer[i] = 0;
             }
 
             // Update Header Text
@@ -434,7 +524,23 @@
             updateStatus();
             ROLL_BUTTON.disabled = false;
             NEXT_TURN_BUTTON.disabled = true;
-            document.getElementById('message-box').classList.add('hidden');
+            MESSAGE_BOX.classList.add('hidden'); // Use MESSAGE_BOX variable
+        }
+        
+        // --- MODAL CLOSURE FIX ---
+        function closeModalsOnClickOutside(event) {
+            const modalId = event.currentTarget.id;
+            const modalEl = event.currentTarget;
+            const modalContent = modalEl.querySelector('.modal-content');
+
+            if (event.target === modalEl && modalContent && !modalContent.contains(event.target)) {
+                 if (modalId === 'stats-modal') {
+                     STATS_MODAL.classList.add('hidden');
+                 } else if (modalId === 'message-box' && !gameWon && !pendingRestart) {
+                     // Only close message box if it's not a winner/restart state
+                     MESSAGE_BOX.classList.add('hidden');
+                 }
+            }
         }
 
         // --- RENDERING FUNCTIONS ---
@@ -559,6 +665,32 @@
                 HAND_RESULT_DISPLAY.classList.remove('text-red-700', 'text-green-700', 'text-yellow-700');
             }
 
+            // --- DYNAMIC BUTTON COLOR CHANGE FIX ---
+            const rollButtonEl = document.getElementById('roll-button');
+            
+            // Define all possible background and hover classes used for player colors
+            const allColorClasses = [
+                'bg-blue-600', 'hover:bg-blue-700',
+                'bg-red-600', 'hover:bg-red-700',
+                'bg-green-600', 'hover:bg-green-700'
+            ];
+
+            // Define the specific class sets for the current player
+            const playerColors = {
+                1: ['bg-blue-600', 'hover:bg-blue-700'],
+                2: ['bg-red-600', 'hover:bg-red-700'],
+                3: ['bg-green-600', 'hover:bg-green-700']
+            };
+
+            // 1. Remove all potential player color classes
+            rollButtonEl.classList.remove(...allColorClasses);
+
+            // 2. Add current player's color class
+            if (playerColors[currentPlayer]) {
+                rollButtonEl.classList.add(...playerColors[currentPlayer]);
+            }
+            // ------------------------------------
+
             ROLL_BUTTON.textContent = `Roll Dice (${rollsLeft} Left)`;
             if (rollsLeft === 0) {
                 ROLL_BUTTON.disabled = true;
@@ -566,14 +698,29 @@
             }
         }
 
-        function showMessage(title, text, isWinner = false) {
+        function showMessage(title, text, isWinner = false, isConfirmation = false) {
             document.getElementById('message-title').textContent = title;
             document.getElementById('message-text').textContent = text;
-            document.getElementById('message-box').classList.remove('hidden');
+            MESSAGE_BOX.classList.remove('hidden'); // Use MESSAGE_BOX variable
             gameWon = isWinner; 
+            pendingRestart = isConfirmation;
             
-            const dismissButton = document.querySelector('#message-box button');
-            dismissButton.textContent = isWinner ? 'Start New Game' : 'OK';
+            const dismissButton = document.getElementById('dismiss-button');
+            const cancelButton = document.getElementById('cancel-button');
+
+            // Reset buttons to default appearance
+            dismissButton.classList.remove('bg-red-600', 'hover:bg-red-700');
+            dismissButton.classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+            cancelButton.classList.add('hidden');
+
+            if (isConfirmation) {
+                dismissButton.textContent = 'Yes, Restart';
+                dismissButton.classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+                dismissButton.classList.add('bg-red-600', 'hover:bg-red-700');
+                cancelButton.classList.remove('hidden');
+            } else {
+                dismissButton.textContent = isWinner ? 'Start New Game' : 'OK';
+            }
         }
 
 
@@ -675,6 +822,10 @@
             let matched = (spaceHand === HAND_KEYS.FREE || spaceHand === currentHandMatch);
             
             if (matched) {
+                // Increment claim stats
+                gameStats.successfulClaims++;
+                gameStats.claimsByPlayer[currentPlayer]++;
+                
                 const oldOwner = boardState[r][c].owner;
                 
                 // 1. Permanently claim the space
@@ -714,6 +865,43 @@
             } else {
                 showMessage("Invalid Claim", `Your current hand (${currentHandMatch || 'None'}) does not match the space: ${spaceHand}.`);
             }
+        }
+
+        // --- STATS LOGIC ---
+        function showStats() {
+            const statsContentEl = document.getElementById('stats-content');
+            let html = `
+                <h4 class="text-xl font-semibold mb-2 text-gray-400">Overall Game</h4>
+                <p class="pl-4">Total Dice Rolls: <strong>${gameStats.totalRolls}</strong></p>
+                <p class="pl-4 mb-4">Total Successful Claims: <strong>${gameStats.successfulClaims}</strong></p>
+                
+                <h4 class="text-xl font-semibold mb-2 text-gray-400">Player Performance</h4>
+                <ul class="space-y-3 pl-4">
+            `;
+
+            for (let i = 1; i <= numPlayers; i++) {
+                const name = playerNames[i];
+                const rolls = gameStats.rollsByPlayer[i];
+                const claims = gameStats.claimsByPlayer[i];
+                const sequences = playerSequences[i];
+                const successRate = rolls > 0 ? ((claims / rolls) * 100).toFixed(1) : 0;
+                
+                html += `
+                    <li class="p-3 border-l-4 ${i === 1 ? 'border-blue-500' : (i === 2 ? 'border-red-500' : 'border-green-500')} bg-gray-800 rounded shadow-sm">
+                        <strong class="text-lg">${name} (P${i}):</strong>
+                        <ul>
+                            <li>- Sequences Achieved: <strong>${sequences} / ${WIN_GOAL}</strong></li>
+                            <li>- Total Rolls: ${rolls}</li>
+                            <li>- Successful Claims: ${claims}</li>
+                            <li>- Claim Success Rate: ${successRate}%</li>
+                        </ul>
+                    </li>
+                `;
+            }
+            html += `</ul>`;
+            
+            statsContentEl.innerHTML = html;
+            STATS_MODAL.classList.remove('hidden');
         }
 
 
