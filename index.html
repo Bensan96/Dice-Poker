@@ -519,6 +519,12 @@
                  } else if (modalId === 'message-box' && !gameWon && !pendingRestart) {
                      // Only close message box if it's not a winner/restart state
                      MESSAGE_BOX.classList.add('hidden');
+                 } else if (modalId === 'setup-modal') {
+                     // NEW LOGIC: Allow dismissal of setup modal by clicking outside
+                     SETUP_MODAL.classList.add('hidden');
+                 } else if (modalId === 'continue-modal') {
+                     // NEW LOGIC: Allow dismissal of continue modal by clicking outside
+                     CONTINUE_MODAL.classList.add('hidden');
                  }
             }
         }
@@ -564,7 +570,7 @@
         let gameStats = {}; 
         
         // DOM element variables
-        let STATUS_DISPLAY, TURN_DISPLAY, ROLLS_DISPLAY, HAND_RESULT_DISPLAY, ROLL_BUTTON, NEXT_TURN_BUTTON, WIN_COUNT_DISPLAY, WIN_GOAL_TEXT, DISMISS_BUTTON, STATS_MODAL, MESSAGE_BOX, CONTINUE_MODAL;
+        let STATUS_DISPLAY, TURN_DISPLAY, ROLLS_DISPLAY, HAND_RESULT_DISPLAY, ROLL_BUTTON, NEXT_TURN_BUTTON, WIN_COUNT_DISPLAY, WIN_GOAL_TEXT, DISMISS_BUTTON, STATS_MODAL, MESSAGE_BOX, CONTINUE_MODAL, SETUP_MODAL;
 
         // --- AUTOSAVE/LOAD LOGIC ---
         function saveGame() {
@@ -987,10 +993,13 @@
             STATS_MODAL = document.getElementById('stats-modal');
             MESSAGE_BOX = document.getElementById('message-box');
             CONTINUE_MODAL = document.getElementById('continue-modal');
+            SETUP_MODAL = document.getElementById('setup-modal'); // Define SETUP_MODAL
 
             // Attach external modal handlers
             STATS_MODAL.addEventListener('click', closeModalsOnClickOutside);
             MESSAGE_BOX.addEventListener('click', closeModalsOnClickOutside);
+            CONTINUE_MODAL.addEventListener('click', closeModalsOnClickOutside); // NEW: Allow continue modal to be dismissed
+            SETUP_MODAL.addEventListener('click', closeModalsOnClickOutside);     // NEW: Allow setup modal to be dismissed
             
             if (loadGame()) {
                  // Saved game found, show the continue prompt
@@ -1004,11 +1013,11 @@
                 document.getElementById('start-new-game').onclick = () => {
                     CONTINUE_MODAL.classList.add('hidden');
                     clearSave(); // Clear save file
-                    document.getElementById('setup-modal').classList.remove('hidden'); // Show player count selection
+                    SETUP_MODAL.classList.remove('hidden'); // Show player count selection
                 };
             } else {
                  // No saved game, show player count selection
-                document.getElementById('setup-modal').classList.remove('hidden');
+                SETUP_MODAL.classList.remove('hidden');
             }
         }
         
