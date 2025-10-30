@@ -54,20 +54,27 @@
             text-shadow: none;
         }
         
+        /* DICE STYLES */
         .dice {
             width: 50px; 
             height: 50px;
-            background-color: #F9FAFB; 
+            background-color: var(--dark-container); 
             border: 2px solid #6B7280; 
             border-radius: 10px; 
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5); 
             padding: 5px; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 36px; 
+            line-height: 1; 
+            color: white; 
         }
         .dice-held {
             transform: translateY(-5px);
             box-shadow: 0 6px 12px rgba(0, 0, 0, 0.7);
             border-color: var(--primary-red); 
-            background-color: #4B5563; 
+            background-color: var(--medium-dark); 
         }
         .board-cell {
             background-color: #2D3748; 
@@ -77,8 +84,7 @@
             user-select: none;
             overflow: hidden; 
             font-weight: 600; 
-            font-size: 0.7rem; 
-            text-shadow: none;
+            font-shadow: none;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -88,6 +94,49 @@
             height: 100%;
             width: 100%;
         }
+        /* Style for the text/word icons inside the cell (e.g., Straight, FREE) */
+        .board-cell span {
+            /* Reduced size for words like "Straight" to ensure fit */
+            font-size: 0.75rem; 
+            line-height: 1;
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+        }
+        
+        /* Specific CSS Grid for containing the dice symbols */
+        .dice-container-in-cell {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr); 
+            grid-gap: 1px; 
+            width: 100%;
+            height: 100%;
+            align-items: center;
+            justify-items: center;
+        }
+        
+        /* Style the actual emoji dice small inside the cell */
+        .board-cell .dice-emoji {
+            font-size: 1.1rem; 
+            line-height: 1;
+            padding: 0;
+            margin: 0;
+            display: block; 
+            text-align: center;
+            color: var(--light-text);
+        }
+        /* Ensure the words in special cells are large enough */
+        .board-cell span:not(.dice-container-in-cell) {
+            font-size: 0.75rem; /* Reduced size for words */
+        }
+
+        /* Specific style for the house emoji (Fullhouse) to make it stand out */
+        .board-cell .house-emoji {
+            font-size: 1.8rem; /* Make it large and prominent */
+            line-height: 1;
+        }
+
+
         .board-cell:hover:not(.claimed) {
             transform: scale(1.02);
             background-color: #4B5563; 
@@ -196,45 +245,48 @@
         /* Mobile adjustments */
         @media (max-width: 640px) {
             .board-cell {
-                font-size: 0.5rem;
                 padding: 1px;
             }
             .dice {
                 width: 40px;
                 height: 40px;
+                font-size: 28px;
+            }
+            /* Adjust dice size on the board for small screens */
+            .board-cell .dice-emoji {
+                font-size: 1rem; 
+            }
+            .board-cell .house-emoji {
+                font-size: 1.6rem; 
             }
         }
     </style>
 </head>
-<body class="p-4 bg-gray-100 min-h-screen">
+<body class="p-4 min-h-screen">
 
-    <div id="game-container" class="max-w-4xl mx-auto shadow-2xl rounded-xl bg-white p-6">
-        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6 border-b-2 pb-2">Dice Poker Sequence (<span id="win-goal-text">2 Runs to Win</span>)</h1>
-
-        <!-- Game Info & Status -->
-        <div id="status-panel" class="mb-6 p-4 rounded-lg shadow-inner bg-gray-50">
-            <div id="current-turn-display" class="text-lg font-semibold text-center mb-2"></div>
-            <div id="rolls-left-display" class="text-sm text-center text-gray-600 mb-2"></div>
-            <!-- Player Win Count -->
-            <div id="win-count-display" class="text-sm text-center text-yellow-500 font-semibold mt-1"></div>
-            <div id="hand-result-display" class="text-xl font-bold text-center text-green-700 mt-2"></div>
+    <div id="game-container" class="max-w-4xl mx-auto shadow-2xl rounded-xl p-6">
+        
+        <!-- COMPACT HEADER (TITLE) -->
+        <div class="text-center mb-4">
+             <h1 class="text-2xl font-black pb-1">Dice Poker Sequence (<span id="win-goal-text">2 Runs to Win</span>)</h1>
         </div>
 
-        <!-- Dice Area (MOVED TO BE ABOVE GRID) -->
-        <div id="dice-area" class="flex justify-center space-x-3 mb-6 p-4 border rounded-lg bg-gray-50 shadow">
+        <!-- Dice Area (ABOVE THE BOARD) -->
+        <div id="dice-area" class="flex justify-center space-x-3 mt-0 mb-4 p-4 border rounded-lg shadow">
             <!-- Dice elements will be inserted here -->
         </div>
-
+        
         <!-- Game Board -->
-        <div id="game-board-container" class="aspect-square w-full max-w-lg mx-auto bg-gray-200 border-4 border-gray-800 rounded-lg overflow-hidden shadow-2xl">
+        <div id="game-board-container" class="aspect-square w-full max-w-lg mx-auto border-4 border-gray-800 rounded-lg overflow-hidden shadow-2xl mb-6 bg-gray-800">
             <div id="game-board" class="grid grid-cols-9 grid-rows-9 h-full w-full">
                 <!-- Board cells will be inserted here -->
             </div>
         </div>
         
-        <!-- Controls (MOVED TO THE BOTTOM) -->
+        <!-- --- CONTROLS (Between Board and Status) --- -->
+        
+        <!-- Primary Controls (Roll & End Turn) -->
         <div class="flex justify-center space-x-4 mt-8 mb-4">
-            <!-- Note: The class will be managed by JS for dynamic color -->
             <button id="roll-button" class="control-button text-white font-bold py-3 px-8 rounded-lg shadow-md text-lg transition duration-150 ease-in-out" disabled>
                 Roll Dice (3 Left)
             </button>
@@ -243,7 +295,7 @@
             </button>
         </div>
         
-        <!-- New Controls for Stats and Restart -->
+        <!-- Secondary Controls (Stats & Restart) -->
         <div class="flex justify-center space-x-4 mt-4 mb-4">
              <button id="stats-button" class="control-button bg-yellow-500 hover:bg-yellow-600 text-gray-800 font-bold py-2 px-6 rounded-lg shadow-md text-base transition duration-150 ease-in-out">
                 View Stats
@@ -252,6 +304,21 @@
                 Restart Game
             </button>
         </div>
+        
+        <!-- Game Info & Status (Minimized) - MOVED TO BE LAST -->
+        <div id="status-panel" class="mb-4 p-3 rounded-lg shadow-inner">
+            <!-- Row 1: Turn, Rolls, and Hand Result -->
+            <div class="flex justify-between items-center mb-2">
+                <div id="current-turn-display" class="text-base font-semibold"></div>
+                <div id="rolls-left-display" class="text-sm text-gray-400"></div>
+            </div>
+            <div id="hand-result-display" class="text-xl font-extrabold text-center mt-1"></div>
+
+            <!-- Row 2: Player Win Count -->
+            <div id="win-count-display" class="text-sm text-center font-semibold mt-2 border-t border-gray-600 pt-2"></div>
+        </div>
+        
+        <!-- --- END NEW LAYOUT --- -->
         
         <!-- Game Message/Modal (Used for General Messages and Confirmation Prompts) -->
         <div id="message-box" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center p-4 z-50">
@@ -492,24 +559,46 @@
 
         // --- UTILITY FUNCTIONS ---
 
-        function getDiceDots(value, size = 100) {
-            const positionMap = {
-                1: [[50, 50]], 2: [[25, 25], [75, 75]], 3: [[25, 25], [50, 50], [75, 75]],
-                4: [[25, 25], [25, 75], [75, 25], [75, 75]], 5: [[25, 25], [25, 75], [75, 25], [75, 75], [50, 50]],
-                6: [[25, 25], [25, 75], [75, 25], [75, 75], [50, 25], [50, 75]]
-            };
-            const dotRadius = size * 0.08;
-            let svgDots = '';
-            if (positionMap[value]) {
-                positionMap[value].forEach(p => {
-                    svgDots += `<circle cx="${p[0]}" cy="${p[1]}" r="${dotRadius}" fill="#333" />`;
-                });
-            }
-            return `<svg viewBox="0 0 100 100" width="${size}" height="${size}">${svgDots}</svg>`;
+        function getDiceDots(value) {
+             // Use Unicode dice characters for better mobile scaling and rendering consistency
+            const unicodeDice = ['\u2680', '\u2681', '\u2682', '\u2683', '\u2684', '\u2685'];
+            // value 1 corresponds to index 0, value 6 corresponds to index 5
+            return unicodeDice[value - 1];
         }
         
         function renderBoardHand(handString) {
-            return `<span>${handString}</span>`;
+             // Special text strings that should not be converted
+            if (handString === HAND_KEYS.Fullhouse) {
+                 // **CHANGE: Use the House Emoji**
+                 return `<span class="house-emoji">🏡</span>`;
+            }
+            if (['Lucky 7', 'Lucky 11', 'FREE'].includes(handString)) {
+                // Return text wrapped in a span without the specific dice-container for special hands
+                return `<span>${handString}</span>`;
+            }
+            
+            // Special case for 'Straight' to apply the smaller font size explicitly
+            if (handString === HAND_KEYS.Straight) {
+                // Return text wrapped in a span with a custom class for small font
+                return `<span class="text-xs font-semibold">${handString}</span>`;
+            }
+
+            // For strings of numbers (e.g., "6 6 5 5" or "4 4 4"), convert to dice emojis
+            const parts = handString.split(' ').filter(p => p.length > 0);
+            
+            let html = '';
+            
+            // Create a small, compact group of dice emojis, letting CSS handle the grid wrap
+            for (let i = 0; i < parts.length; i++) {
+                const value = parseInt(parts[i]);
+                if (!isNaN(value) && value >= 1 && value <= 6) {
+                    // Each emoji is wrapped in a span with dice-emoji class for specific styling
+                    html += `<span class="dice-emoji">${getDiceDots(value)}</span>`;
+                }
+            }
+            
+            // Wrap the emojis in a specific container to trigger the CSS Grid layout
+            return `<div class="dice-container-in-cell">${html}</div>`;
         }
 
         function getHandString(values, type) {
@@ -680,8 +769,10 @@
             diceAreaEl.innerHTML = '';
             diceValues.forEach((value, index) => {
                 const diceEl = document.createElement('div');
-                diceEl.className = `dice ${diceHeld[index] ? 'dice-held' : 'bg-gray-200'}`;
-                diceEl.innerHTML = getDiceDots(value, 40); 
+                // FIX: Remove 'bg-gray-200' so the dark background from the CSS (.dice) is used
+                diceEl.className = `dice ${diceHeld[index] ? 'dice-held' : ''}`;
+                // Use Unicode char
+                diceEl.textContent = getDiceDots(value); 
                 diceEl.onclick = () => toggleDiceHold(index);
                 diceAreaEl.appendChild(diceEl);
             });
@@ -823,6 +914,24 @@
         // --- GAME INITIALIZATION & SETUP ---
 
         function initGame() {
+            // Initialize DOM element references now, before potentially showing modals
+            STATUS_DISPLAY = document.getElementById('status-panel');
+            TURN_DISPLAY = document.getElementById('current-turn-display');
+            ROLLS_DISPLAY = document.getElementById('rolls-left-display');
+            HAND_RESULT_DISPLAY = document.getElementById('hand-result-display');
+            ROLL_BUTTON = document.getElementById('roll-button');
+            NEXT_TURN_BUTTON = document.getElementById('next-turn-button');
+            WIN_COUNT_DISPLAY = document.getElementById('win-count-display');
+            WIN_GOAL_TEXT = document.getElementById('win-goal-text');
+            DISMISS_BUTTON = document.getElementById('dismiss-button');
+            STATS_MODAL = document.getElementById('stats-modal');
+            MESSAGE_BOX = document.getElementById('message-box');
+            CONTINUE_MODAL = document.getElementById('continue-modal');
+
+            // Attach external modal handlers
+            STATS_MODAL.addEventListener('click', closeModalsOnClickOutside);
+            MESSAGE_BOX.addEventListener('click', closeModalsOnClickOutside);
+            
             if (loadGame()) {
                  // Saved game found, show the continue prompt
                 CONTINUE_MODAL.classList.remove('hidden');
@@ -848,19 +957,7 @@
         }
         
         function runGameSetup(isLoad = false) {
-            // Initialize DOM elements
-            STATUS_DISPLAY = document.getElementById('status-panel');
-            TURN_DISPLAY = document.getElementById('current-turn-display');
-            ROLLS_DISPLAY = document.getElementById('rolls-left-display');
-            HAND_RESULT_DISPLAY = document.getElementById('hand-result-display');
-            ROLL_BUTTON = document.getElementById('roll-button');
-            NEXT_TURN_BUTTON = document.getElementById('next-turn-button');
-            WIN_COUNT_DISPLAY = document.getElementById('win-count-display');
-            WIN_GOAL_TEXT = document.getElementById('win-goal-text');
-            DISMISS_BUTTON = document.getElementById('dismiss-button');
-            STATS_MODAL = document.getElementById('stats-modal');
-            MESSAGE_BOX = document.getElementById('message-box');
-            CONTINUE_MODAL = document.getElementById('continue-modal');
+            // DOM elements already initialized in initGame now.
             const CANCEL_BUTTON = document.getElementById('cancel-button'); 
 
             // --- EVENT LISTENERS ---
@@ -877,9 +974,6 @@
             document.getElementById('restart-button').addEventListener('click', promptRestartConfirmation);
             document.getElementById('stats-button').addEventListener('click', showStats);
             
-            STATS_MODAL.addEventListener('click', closeModalsOnClickOutside);
-            MESSAGE_BOX.addEventListener('click', closeModalsOnClickOutside);
-
             if (!isLoad) {
                 // Initialize NEW board state and stats
                 for (let r = 0; r < 9; r++) {
@@ -892,9 +986,8 @@
                 }
                 currentPlayer = 1;
                 rollsLeft = 3;
-                currentHandMatch = null;
-                diceValues = [1, 1, 1, 1, 1];
                 diceHeld = [false, false, false, false, false];
+                currentHandMatch = null;
                 gameWon = false; 
                 playerSequences = {};
                 gameStats = { totalRolls: 0, successfulClaims: 0, rollsByPlayer: {}, claimsByPlayer: {} };
@@ -912,7 +1005,8 @@
                  const sequencesFound = findSequences(currentPlayer);
                  sequencesFound.forEach(seq => {
                     seq.cells.forEach(cellCoords => {
-                        boardState[cellCoords.r][cellCoords.c].inSequence = true;
+                        // FIX: Ensure correct indexing for state update
+                        boardState[cellCoords.r][cellCoords.c].inSequence = true; 
                     });
                 });
             }
